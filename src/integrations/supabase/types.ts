@@ -14,13 +14,209 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      feedback_attempts: {
+        Row: {
+          attempts: number
+          key: string
+          locked_until: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          key: string
+          locked_until?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          key?: string
+          locked_until?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      feedback_customers: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          pin_hash: string | null
+          pin_version: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          pin_hash?: string | null
+          pin_version?: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          pin_hash?: string | null
+          pin_version?: number
+        }
+        Relationships: []
+      }
+      feedback_history: {
+        Row: {
+          action: string
+          actor: string
+          created_at: string
+          customer_id: string | null
+          field: string
+          id: string
+          item_id: string | null
+          new_value: string | null
+          old_value: string | null
+        }
+        Insert: {
+          action: string
+          actor: string
+          created_at?: string
+          customer_id?: string | null
+          field?: string
+          id?: string
+          item_id?: string | null
+          new_value?: string | null
+          old_value?: string | null
+        }
+        Update: {
+          action?: string
+          actor?: string
+          created_at?: string
+          customer_id?: string | null
+          field?: string
+          id?: string
+          item_id?: string | null
+          new_value?: string | null
+          old_value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_history_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "feedback_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "feedback_history_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "feedback_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feedback_imports: {
+        Row: {
+          actor: string
+          created_at: string
+          digest: string
+          file_name: string
+          id: string
+          row_count: number
+        }
+        Insert: {
+          actor: string
+          created_at?: string
+          digest: string
+          file_name: string
+          id?: string
+          row_count: number
+        }
+        Update: {
+          actor?: string
+          created_at?: string
+          digest?: string
+          file_name?: string
+          id?: string
+          row_count?: number
+        }
+        Relationships: []
+      }
+      feedback_items: {
+        Row: {
+          activity: string
+          actor: string
+          category: string
+          completion_date: string | null
+          customer_id: string
+          deleted_at: string | null
+          detail: string
+          estimated_date: string | null
+          feature: string
+          feedback: string
+          id: string
+          notes: string
+          number: number
+          status: string
+          type: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          activity: string
+          actor?: string
+          category: string
+          completion_date?: string | null
+          customer_id: string
+          deleted_at?: string | null
+          detail?: string
+          estimated_date?: string | null
+          feature?: string
+          feedback: string
+          id?: string
+          notes?: string
+          number: number
+          status: string
+          type: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          activity?: string
+          actor?: string
+          category?: string
+          completion_date?: string | null
+          customer_id?: string
+          deleted_at?: string | null
+          detail?: string
+          estimated_date?: string | null
+          feature?: string
+          feedback?: string
+          id?: string
+          notes?: string
+          number?: number
+          status?: string
+          type?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "feedback_items_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "feedback_customers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      feedback_record_failure: {
+        Args: { attempt_keys: string[] }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

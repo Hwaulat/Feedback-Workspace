@@ -2,7 +2,7 @@ import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { session, requireAccess, pinHash, attemptKeys, freshPin } from './feedback-session.server';
-import { itemSchema, PIN_PATTERN, SESSION_SECONDS, type Access } from './feedback-model';
+import { itemSchema, PIN_PATTERN, SESSION_SECONDS, type Access, type Customer, type FeedbackItem, type HistoryEntry } from './feedback-model';
 
 export const getAccess = createServerFn({method:'GET'}).handler(async()=>{
   const s=await session(); if(!s.data.access) return null;
@@ -28,7 +28,7 @@ export const signIn = createServerFn({method:'POST'}).inputValidator((v)=>z.obje
   await s.update({access}); return {ok:true,error:null};
 });
 export const signOut = createServerFn({method:'POST'}).handler(async()=>{await (await session()).clear();return {ok:true};});
-export const getWorkspace = createServerFn({method:'GET'}).handler(async()=>{
+export const getWorkspace = createServerFn({method:'GET'}).handler(async(): Promise<{customers:Customer[];items:FeedbackItem[];history:HistoryEntry[]}>=>{
   const access=await requireAccess(); const {supabaseAdmin:db}=await import('@/integrations/supabase/client.server');
   let cq=db.from('feedback_customers').select('id,name,active,pin_version,created_at').order('name');
   let iq=db.from('feedback_items').select('*').order('number').limit(1000);
@@ -36,7 +36,7 @@ export const getWorkspace = createServerFn({method:'GET'}).handler(async()=>{
   const [customers,items]=await Promise.all([cq,iq]);if(customers.error||items.error)throw new Error('Feedback could not be loaded. Please try again.');
   const history=access.role==='admin'?await db.from('feedback_history').select('*').order('created_at',{ascending:false}).limit(100):{data:[],error:null};
   if(history.error) throw new Error('Change history could not be loaded.');
-  return {customers:customers.data ?? [],items:items.data ?? [],history:history.data ?? []};
+  return {customers:(customers.data ?? []) as Customer[],items:(items.data ?? []) as unknown as FeedbackItem[],history:(history.data ?? []) as HistoryEntry[]};
 });
 export const saveItem = createServerFn({method:'POST'}).inputValidator(v=>z.object({item:itemSchema,id:z.string().uuid().optional(),version:z.number().int().optional()}).parse(v)).handler(async({data})=>{
   const access=await requireAccess(true); const {supabaseAdmin:db}=await import('@/integrations/supabase/client.server');

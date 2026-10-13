@@ -20,7 +20,8 @@ const examples = [
   ['Dashboard','Show overdue orders in overview','Change Request','Minor','Waiting','Pending','2026-10-20'],
 ] as const;
 export const demoItems: FeedbackItem[] = Array.from({length:48},(_,i) => {
-  const row = examples[i % examples.length];
-  return { id:`demo-${i}`, customer_id:demoCustomers[Math.floor(i/12)].id, number:i%12+1, feature:row[0], feedback:row[1], type:row[2], category:row[3], status:row[4], activity:row[5], estimated_date:row[6], detail:'Reported during the latest customer review. The team has reproduced the issue and is reviewing the next steps.', notes:row[5]==='Done'?'Resolved and verified with the customer.':'Assigned to the product team for review.', completion_date:row[5]==='Done'?'2026-10-07':null, deleted_at:null, updated_at:'2026-10-12T07:30:00Z', actor:'Hasan Waulat' };
+  const row = examples[i % examples.length]!;
+  const customer = demoCustomers[Math.floor(i/12)] ?? demoCustomers[0]!;
+  return { id:`demo-${i}`, customer_id:customer.id, number:i%12+1, feature:row[0], feedback:row[1], type:row[2], category:row[3], status:row[4], activity:row[5], estimated_date:row[6], detail:'Reported during the latest customer review. The team has reproduced the issue and is reviewing the next steps.', notes:row[5]==='Done'?'Resolved and verified with the customer.':'Assigned to the product team for review.', version:1, completion_date:row[5]==='Done'?'2026-10-07':null, deleted_at:null, updated_at:'2026-10-12T07:30:00Z', actor:'Hasan Waulat' };
 });
 export const demoHistory: HistoryEntry[] = demoItems.slice(0,5).map((item,i)=>({id:`history-${i}`,customer_id:item.customer_id,item_id:item.id,action:i===0?'Updated feedback':i===1?'Imported feedback':'Created feedback',field:'activity',old_value:'Pending',new_value:item.activity,actor:i%2?'Sarah Chen':'Hasan Waulat',created_at:`2026-10-12T0${8-i}:20:00Z`}));

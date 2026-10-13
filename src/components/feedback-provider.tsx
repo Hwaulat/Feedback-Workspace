@@ -18,7 +18,7 @@ export function FeedbackProvider({children}:{children:ReactNode}){
   const {data:access}=useSuspenseQuery(accessQuery);
   return access?<ConnectedWorkspace access={access}>{children}</ConnectedWorkspace>:<WorkspaceState access={null} customers={demoCustomers} items={demoItems} history={demoHistory}>{children}</WorkspaceState>;
 }
-function ConnectedWorkspace({access,children}:{access:Access;children:ReactNode}){const {data}=useSuspenseQuery(workspaceQuery);return <WorkspaceState access={access} {...data}>{children}</WorkspaceState>;}
+function ConnectedWorkspace({access,children}:{access:Access;children:ReactNode}){const {data}=useSuspenseQuery(workspaceQuery);return <WorkspaceState access={access} customers={data.customers} items={data.items} history={data.history}>{children}</WorkspaceState>;}
 function WorkspaceState({access,customers,items,history,children}:{access:Access|null;customers:Customer[];items:FeedbackItem[];history:HistoryEntry[];children:ReactNode}){
   const [demoItemsState,setDemoItems]=useState(items);const [demoCustomersState,setDemoCustomers]=useState(customers);const [demoHistoryState,setDemoHistory]=useState(history);
   const [selectedCustomer,setSelectedCustomer]=useState('all');const [loginOpen,setLoginOpen]=useState(false);const queryClient=useQueryClient();

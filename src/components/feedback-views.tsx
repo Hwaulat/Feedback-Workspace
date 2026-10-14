@@ -450,7 +450,7 @@ export function FormModal({
   // Auto next number calculated from the last feedback number for that customer
   const autoNextNumber = useMemo(() => {
     const activeId = isCustomer ? defaultCustId : (selectedCustId || defaultCustId);
-    const custItems = items.filter(i => i.customer_id === activeId && !i.deleted_at);
+    const custItems = items.filter(i => i.customer_id === activeId);
     const nums = custItems.map(i => i.number).filter(n => typeof n === 'number' && !isNaN(n));
     return nums.length > 0 ? Math.max(...nums) + 1 : 1;
   }, [items, isCustomer, defaultCustId, selectedCustId]);

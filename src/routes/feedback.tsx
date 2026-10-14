@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { Plus, Search, Download, Trash2 } from 'lucide-react';
+import { Plus, Search, Download, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
 import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, fmtDate, fmtDateTime } from '@/components/feedback-views';
@@ -15,38 +15,63 @@ function FeedbackPage() {
   const { access, demo, customers, items, selectedCustomer, setSelectedCustomer, exportToExcel, remove, openLogin } = useWorkspace();
   const [search, setSearch] = useState(''); const [type, setType] = useState('all'); const [status, setStatus] = useState('all'); const [activity, setActivity] = useState('all');
   const [reviewFilter, setReviewFilter] = useState('all');
+  const [viewTrash, setViewTrash] = useState(false);
   const [detail, setDetail] = useState<FeedbackItem | null>(null); const [editing, setEditing] = useState<FeedbackItem | null>(null); const [creating, setCreating] = useState(false);
   const canManage = access?.role === 'admin';
+
+  const trashCount = useMemo(
+    () => items.filter(i => Boolean(i.deleted_at) && (selectedCustomer === 'all' || i.customer_id === selectedCustomer)).length,
+    [items, selectedCustomer],
+  );
+
   const rows = useMemo(() => items
-    .filter(i => !i.deleted_at
+    .filter(i => (viewTrash ? Boolean(i.deleted_at) : !i.deleted_at)
       && (selectedCustomer === 'all' || i.customer_id === selectedCustomer)
       && (type === 'all' || i.type === type)
       && (status === 'all' || i.status === status)
       && (activity === 'all' || i.activity === activity || (activity === 'Not started' && (i.activity as string) === 'Pending'))
       && (reviewFilter === 'all' || (reviewFilter === 'needs_update' ? Boolean(i.needs_review) : !i.needs_review))
       && (search === '' || `${i.feature} ${i.feedback} ${i.notes} ${i.detail}`.toLowerCase().includes(search.toLowerCase())))
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [items, selectedCustomer, type, status, activity, reviewFilter, search]);
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search]);
+
   const open = (item: FeedbackItem) => (canManage ? setEditing(item) : setDetail(item));
   const needsUpdateCount = items.filter(i => !i.deleted_at && i.needs_review).length;
   return (
     <>
       <div className="page-heading">
-        <div><h1>Feedback list</h1><p>{canManage ? 'Track, update and close out customer feedback.' : 'Progress and updates for your feedback.'}</p></div>
+        <div>
+          <h1>{viewTrash ? 'Trash / Deleted feedback' : 'Feedback list'}</h1>
+          <p>{viewTrash ? 'Review deleted feedback items and restore them anytime.' : (canManage ? 'Track, update and close out customer feedback.' : 'Progress and updates for your feedback.')}</p>
+        </div>
         <div className="heading-actions">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => exportToExcel(rows)}
-            disabled={rows.length === 0}
-            title="Export feedback to Excel file (.xlsx)"
-          >
-            <Download />Export by Excel ({rows.length})
-          </Button>
-          {canManage ? (
+          {canManage && trashCount > 0 && (
+            <Button
+              variant={viewTrash ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setViewTrash(prev => !prev)}
+              className={viewTrash ? 'border-destructive/40 text-destructive' : ''}
+              title={viewTrash ? 'Back to active feedback list' : 'View deleted feedback items'}
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" />
+              <span>{viewTrash ? 'Active list' : `Trash (${trashCount})`}</span>
+            </Button>
+          )}
+          {!viewTrash && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportToExcel(rows)}
+              disabled={rows.length === 0}
+              title="Export feedback to Excel file (.xlsx)"
+            >
+              <Download />Export by Excel ({rows.length})
+            </Button>
+          )}
+          {!viewTrash && (canManage ? (
             <Button size="sm" onClick={() => setCreating(true)}><Plus />New feedback</Button>
           ) : access?.role === 'customer' ? (
             <Button size="sm" onClick={() => setCreating(true)}><Plus />Submit feedback</Button>
-          ) : null}
+          ) : null)}
         </div>
       </div>
       <div className="filters-line">
@@ -122,33 +147,53 @@ function FeedbackPage() {
               <tbody>
                 {rows.map(item => (
                   <tr key={item.id} onClick={() => open(item)}>
-                    <td style={{ textAlign: 'center', padding: '10px 8px', width: 60 }} onClick={e => e.stopPropagation()}>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="delete-table-btn"
-                        disabled={item.activity === 'Done'}
-                        title={
-                          item.activity === 'Done'
-                            ? "Feedback with activity status 'Done' cannot be deleted"
-                            : `Delete feedback #${item.number}`
-                        }
-                        aria-label={
-                          item.activity === 'Done'
-                            ? "Cannot delete feedback with Done activity"
-                            : `Delete feedback #${item.number}`
-                        }
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          if (item.activity === 'Done') return;
-                          if (window.confirm(`Are you sure you want to delete feedback #${item.number}?`)) {
-                            await remove(item);
+                    <td style={{ textAlign: 'center', padding: '10px 8px', width: item.deleted_at ? 95 : 60 }} onClick={e => e.stopPropagation()}>
+                      {item.deleted_at ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs inline-flex items-center gap-1 text-primary hover:bg-primary/10 border-primary/30"
+                          title={`Restore feedback #${item.number}`}
+                          aria-label={`Restore feedback #${item.number}`}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Restore feedback #${item.number}?`)) {
+                              await remove(item, true);
+                            }
+                          }}
+                        >
+                          <RotateCcw size={12} />
+                          <span>Restore</span>
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="delete-table-btn"
+                          disabled={item.activity === 'Done'}
+                          title={
+                            item.activity === 'Done'
+                              ? "Feedback with activity status 'Done' cannot be deleted"
+                              : `Delete feedback #${item.number}`
                           }
-                        }}
-                      >
-                        <Trash2 size={16} />
-                      </Button>
+                          aria-label={
+                            item.activity === 'Done'
+                              ? "Cannot delete feedback with Done activity"
+                              : `Delete feedback #${item.number}`
+                          }
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            if (item.activity === 'Done') return;
+                            if (window.confirm(`Are you sure you want to delete feedback #${item.number}?`)) {
+                              await remove(item);
+                            }
+                          }}
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      )}
                     </td>
                     <td style={{ width: 50, padding: '10px 8px' }}>{item.number}</td>
                     <td>
@@ -202,33 +247,54 @@ function FeedbackPage() {
                     {item.image && <span className="inline-image-badge" style={{ marginLeft: 6 }}>📷 Attachment</span>}
                   </p>
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="delete-table-btn"
-                  disabled={item.activity === 'Done'}
-                  title={
-                    item.activity === 'Done'
-                      ? "Feedback with activity status 'Done' cannot be deleted"
-                      : `Delete feedback #${item.number}`
-                  }
-                  aria-label={
-                    item.activity === 'Done'
-                      ? "Cannot delete feedback with Done activity"
-                      : `Delete feedback #${item.number}`
-                  }
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    if (item.activity === 'Done') return;
-                    if (window.confirm(`Are you sure you want to delete feedback #${item.number}?`)) {
-                      await remove(item);
+                {item.deleted_at ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs inline-flex items-center gap-1 text-primary border-primary/30"
+                    title={`Restore feedback #${item.number}`}
+                    aria-label={`Restore feedback #${item.number}`}
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (window.confirm(`Restore feedback #${item.number}?`)) {
+                        await remove(item, true);
+                      }
+                    }}
+                    style={{ flexShrink: 0 }}
+                  >
+                    <RotateCcw size={12} />
+                    <span>Restore</span>
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="delete-table-btn"
+                    disabled={item.activity === 'Done'}
+                    title={
+                      item.activity === 'Done'
+                        ? "Feedback with activity status 'Done' cannot be deleted"
+                        : `Delete feedback #${item.number}`
                     }
-                  }}
-                  style={{ flexShrink: 0, height: 28, width: 28 }}
-                >
-                  <Trash2 size={15} />
-                </Button>
+                    aria-label={
+                      item.activity === 'Done'
+                        ? "Cannot delete feedback with Done activity"
+                        : `Delete feedback #${item.number}`
+                    }
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      if (item.activity === 'Done') return;
+                      if (window.confirm(`Are you sure you want to delete feedback #${item.number}?`)) {
+                        await remove(item);
+                      }
+                    }}
+                    style={{ flexShrink: 0, height: 28, width: 28 }}
+                  >
+                    <Trash2 size={15} />
+                  </Button>
+                )}
               </div>
               <div className="mobile-meta">
                 {canManage && (

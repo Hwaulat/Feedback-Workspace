@@ -17,8 +17,9 @@ export interface ServerWorkspaceData {
   history: HistoryEntry[];
 }
 
+const isTestEnv = process.env['NODE_ENV'] === 'test' || process.env['VITEST'] === 'true';
 const DATA_DIR = path.resolve(process.cwd(), 'data');
-const DB_FILE = path.resolve(DATA_DIR, 'workspace.json');
+const DB_FILE = path.resolve(DATA_DIR, isTestEnv ? 'workspace.test.json' : 'workspace.json');
 
 let writeLock = Promise.resolve();
 
@@ -406,18 +407,46 @@ export async function syncClientDataToServer(clientData: {
   history: HistoryEntry[];
 }): Promise<boolean> {
   const store = await readServerStore();
+  let changed = false;
 
-  // If server already has data, do not overwrite unless server is empty
-  if (store.items.length === 0 && clientData.items.length > 0) {
-    const customersWithHash = clientData.customers.map(c => ({
-      ...c,
-      pin_hash: c.pin ? pinHash(c.pin) : undefined,
-    }));
-    await writeServerStore({
-      customers: customersWithHash,
-      items: clientData.items,
-      history: clientData.history,
-    });
+  // Merge customers: add customer or fill missing pin/pin_hash
+  for (const c of clientData.customers) {
+    const existingIdx = store.customers.findIndex(
+      sc => sc.id === c.id || sc.name.toLowerCase() === c.name.toLowerCase(),
+    );
+    if (existingIdx >= 0) {
+      if (c.pin && !store.customers[existingIdx]!.pin) {
+        store.customers[existingIdx]!.pin = c.pin;
+        store.customers[existingIdx]!.pin_hash = pinHash(c.pin);
+        changed = true;
+      }
+    } else {
+      store.customers.push({
+        ...c,
+        pin_hash: c.pin ? pinHash(c.pin) : undefined,
+      });
+      changed = true;
+    }
+  }
+
+  // Merge items
+  for (const item of clientData.items) {
+    const existingIdx = store.items.findIndex(
+      si => si.id === item.id || (si.customer_id === item.customer_id && si.number === item.number && !si.deleted_at),
+    );
+    if (existingIdx === -1) {
+      store.items.unshift(item);
+      changed = true;
+    }
+  }
+
+  if (store.history.length === 0 && clientData.history.length > 0) {
+    store.history = clientData.history;
+    changed = true;
+  }
+
+  if (changed || (store.items.length === 0 && clientData.items.length > 0)) {
+    await writeServerStore(store);
     return true;
   }
 

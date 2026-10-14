@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="loopGrad" x1="8" y1="14" x2="56" y2="50" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#02A9EA" />
+      <stop offset="50%" stop-color="#00C4FF" />
+      <stop offset="100%" stop-color="#2563EB" />
+    </linearGradient>
+    <filter id="glow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="1.5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+  <!-- Background squircle -->
+  <rect width="64" height="64" rx="16" fill="#0B132B" />
+  <rect x="0.5" y="0.5" width="63" height="63" rx="15.5" stroke="#1E293B" />
+  
+  <!-- Sleek Infinite Loop Symbol -->
+  <path
+    d="M21 23C16.0294 23 12 27.0294 12 32C12 36.9706 16.0294 41 21 41C26.5 41 30.5 35 32 32C33.5 29 37.5 23 43 23C47.9706 23 52 27.0294 52 32C52 36.9706 47.9706 41 43 41C37.5 41 33.5 35 32 32C30.5 29 26.5 23 21 23Z"
+    stroke="url(#loopGrad)"
+    stroke-width="5.5"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#glow)"
+  />
+  
+  <!-- Subtle accent dots on loop vertices -->
+  <circle cx="21" cy="32" r="2.5" fill="#02A9EA" />
+  <circle cx="43" cy="32" r="2.5" fill="#00C4FF" />
+</svg>

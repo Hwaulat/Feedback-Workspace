@@ -117,7 +117,7 @@ export const signIn = createServerFn({ method: 'POST' })
     }
 
     await s.update({ access });
-    return { ok: true, error: null };
+    return { ok: true, access, error: null };
   });
 
 export const signOut = createServerFn({ method: 'POST' }).handler(async () => {
@@ -287,9 +287,6 @@ export const syncClientWorkspace = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     try {
-      const { session } = await import('./feedback-session.server');
-      const s = await session();
-      if (!s.data.access) return { synced: false };
       const synced = await syncClientDataToServer({
         items: data.items,
         customers: data.customers,

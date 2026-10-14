@@ -153,9 +153,9 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     }
   }, [serverWorkspace, clientAccess]);
 
-  // Auto-migration: If client has existing uploaded items in Chrome but server store is empty, push to server
+  // Auto-migration: If client has existing uploaded items/customers in Chrome, push to server store
   useEffect(() => {
-    if (clientAccess && serverWorkspace && serverWorkspace.items.length === 0 && items.length > 0) {
+    if (items.length > 0 || customers.length > 0) {
       syncFn({ data: { items, customers, history } })
         .then(res => {
           if (res?.synced) {
@@ -164,7 +164,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         })
         .catch(() => {});
     }
-  }, [clientAccess, serverWorkspace]);
+  }, []);
 
   // Sync state changes to localStorage cache
   useEffect(() => {
@@ -241,11 +241,18 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     try {
       const res = await signInFn({ data: { mode: 'admin', passcode, actor: cleanActor } });
       if (res.ok) {
-        const adminAccess: Access = { role: 'admin', actor: cleanActor, expires: Date.now() + 8 * 3600 * 1000 };
+        const adminAccess: Access = (res as any).access ?? {
+          role: 'admin',
+          actor: cleanActor,
+          expires: Date.now() + 8 * 3600 * 1000,
+        };
         setClientAccess(adminAccess);
         await refresh();
         toast.success(`Welcome back, ${cleanActor}`);
         return { ok: true };
+      }
+      if (res.error) {
+        return { ok: false, error: res.error };
       }
     } catch {}
 
@@ -269,16 +276,22 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     try {
       const res = await signInFn({ data: { mode: 'customer', passcode: pin, actor: '' } });
       if (res.ok) {
-        const serverAcc = await getAccess();
-        if (serverAcc) {
-          setClientAccess(serverAcc);
-          if (serverAcc.customer_id) setSelectedCustomer(serverAcc.customer_id);
+        const custAccess: Access | null = (res as any).access ?? (await getAccess());
+        if (custAccess) {
+          setClientAccess(custAccess);
+          if (custAccess.customer_id) setSelectedCustomer(custAccess.customer_id);
         }
         await refresh();
         toast.success('Welcome to your feedback portal');
         return { ok: true };
       }
-    } catch {}
+      if (res.error) {
+        return { ok: false, error: res.error };
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      if (msg) return { ok: false, error: msg };
+    }
 
     // 2. Fallback checking against customers in local cache
     const target = customers.find(c => c.pin === pin);

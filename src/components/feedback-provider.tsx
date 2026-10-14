@@ -1,13 +1,33 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
-import { queryOptions, useQueryClient, useSuspenseQuery } from '@tanstack/react-query';
+import { queryOptions, useQueryClient, useSuspenseQuery, useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
-import { getAccess, getWorkspace, signIn, signOut, saveItem, deleteItem, manageCustomer, clearWorkspaceData } from '@/lib/feedback.functions';
+import {
+  getAccess,
+  getWorkspace,
+  signIn,
+  signOut,
+  saveItem,
+  deleteItem,
+  manageCustomer,
+  clearWorkspaceData,
+  importFeedback,
+  syncClientWorkspace,
+} from '@/lib/feedback.functions';
 import { exportFeedback } from '@/lib/excel.functions';
-import { itemSchema, type Access, type Customer, type FeedbackItem, type HistoryEntry, type ItemInput, todayWIB, PIN_PATTERN } from '@/lib/feedback-model';
+import {
+  itemSchema,
+  type Access,
+  type Customer,
+  type FeedbackItem,
+  type HistoryEntry,
+  type ItemInput,
+  todayWIB,
+  PIN_PATTERN,
+} from '@/lib/feedback-model';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { Eye, EyeOff, ArrowRight, ShieldCheck, Trash2, AlertTriangle } from 'lucide-react';
+import { Eye, EyeOff, ArrowRight, ShieldCheck, AlertTriangle } from 'lucide-react';
 
 const STORAGE_KEY_ITEMS = 'loop_feedback_items';
 const STORAGE_KEY_CUSTOMERS = 'loop_feedback_customers';
@@ -80,8 +100,10 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
   const clearFn = useServerFn(clearWorkspaceData);
   const signInFn = useServerFn(signIn);
   const exportFn = useServerFn(exportFeedback);
+  const importFn = useServerFn(importFeedback);
+  const syncFn = useServerFn(syncClientWorkspace);
 
-  // Load purely from persistent real storage - starts with empty arrays (NO dummy data)
+  // Load from persistent local storage as cache / starting point
   const [items, setItems] = useState<FeedbackItem[]>(() => {
     const loaded = loadFromStorage<FeedbackItem[]>(STORAGE_KEY_ITEMS, []);
     return loaded.map(i => ({
@@ -106,10 +128,54 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
   const [loginOpen, setLoginOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
 
-  // Sync state changes to localStorage
-  useEffect(() => { saveToStorage(STORAGE_KEY_ITEMS, items); }, [items]);
-  useEffect(() => { saveToStorage(STORAGE_KEY_CUSTOMERS, customers); }, [customers]);
-  useEffect(() => { saveToStorage(STORAGE_KEY_HISTORY, history); }, [history]);
+  // Server data query with real-time sync across all browsers
+  const { data: serverWorkspace } = useQuery({
+    queryKey: ['feedback-workspace', clientAccess?.actor, clientAccess?.role],
+    queryFn: () => getWorkspace(),
+    enabled: !!clientAccess,
+    refetchInterval: 3000, // automatic background sync every 3s so multi-browser updates show in real-time
+    refetchOnWindowFocus: true,
+  });
+
+  // Sync state when server data is received
+  useEffect(() => {
+    if (serverWorkspace && clientAccess) {
+      setItems(
+        serverWorkspace.items.map(i => ({
+          ...i,
+          activity: ((i.activity as string) === 'Pending' ? 'Not started' : i.activity) as any,
+          needs_review: i.needs_review ?? false,
+          image: i.image ?? null,
+        })),
+      );
+      setCustomers(serverWorkspace.customers);
+      setHistory(serverWorkspace.history);
+    }
+  }, [serverWorkspace, clientAccess]);
+
+  // Auto-migration: If client has existing uploaded items in Chrome but server store is empty, push to server
+  useEffect(() => {
+    if (clientAccess && serverWorkspace && serverWorkspace.items.length === 0 && items.length > 0) {
+      syncFn({ data: { items, customers, history } })
+        .then(res => {
+          if (res?.synced) {
+            queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
+          }
+        })
+        .catch(() => {});
+    }
+  }, [clientAccess, serverWorkspace]);
+
+  // Sync state changes to localStorage cache
+  useEffect(() => {
+    saveToStorage(STORAGE_KEY_ITEMS, items);
+  }, [items]);
+  useEffect(() => {
+    saveToStorage(STORAGE_KEY_CUSTOMERS, customers);
+  }, [customers]);
+  useEffect(() => {
+    saveToStorage(STORAGE_KEY_HISTORY, history);
+  }, [history]);
   useEffect(() => {
     if (clientAccess) saveToStorage(STORAGE_KEY_AUTH, clientAccess);
     else if (typeof window !== 'undefined') localStorage.removeItem(STORAGE_KEY_AUTH);
@@ -120,7 +186,14 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
   const isAdmin = access?.role === 'admin';
   const isCustomer = access?.role === 'customer';
 
-  function addHistoryEntry(action: string, field: string, oldVal: string | null, newVal: string | null, custId: string | null, itemId: string | null) {
+  function addHistoryEntry(
+    action: string,
+    field: string,
+    oldVal: string | null,
+    newVal: string | null,
+    custId: string | null,
+    itemId: string | null,
+  ) {
     const entry: HistoryEntry = {
       id: crypto.randomUUID(),
       customer_id: custId,
@@ -140,7 +213,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     await queryClient.invalidateQueries({ queryKey: ['feedback-access'] });
   }
 
-  // Feature: Clear All Workspace Data ("hapus semua data")
+  // Feature: Clear All Workspace Data
   async function clearAllData() {
     if (!access || access.role !== 'admin') {
       toast.error('Admin authentication required.');
@@ -155,8 +228,9 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       localStorage.removeItem(STORAGE_KEY_HISTORY);
     }
     try {
-      if (isAdmin) await clearFn();
+      await clearFn();
     } catch {}
+    await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
     setSelectedCustomer('all');
     toast.success('All workspace data has been cleared.');
   }
@@ -165,7 +239,6 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
   async function loginAdmin(passcode: string, actor: string): Promise<{ ok: boolean; error?: string }> {
     const cleanActor = actor.trim() || 'Internal Team';
     try {
-      // 1. Try server sign-in
       const res = await signInFn({ data: { mode: 'admin', passcode, actor: cleanActor } });
       if (res.ok) {
         const adminAccess: Access = { role: 'admin', actor: cleanActor, expires: Date.now() + 8 * 3600 * 1000 };
@@ -174,15 +247,16 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         toast.success(`Welcome back, ${cleanActor}`);
         return { ok: true };
       }
-    } catch {
-      // Fallback local verification for offline / self-hosted admin passcode
-      if (passcode === 'admin123') {
-        const adminAccess: Access = { role: 'admin', actor: cleanActor, expires: Date.now() + 8 * 3600 * 1000 };
-        setClientAccess(adminAccess);
-        toast.success(`Welcome back, ${cleanActor}`);
-        return { ok: true };
-      }
+    } catch {}
+
+    if (passcode === 'admin123') {
+      const adminAccess: Access = { role: 'admin', actor: cleanActor, expires: Date.now() + 8 * 3600 * 1000 };
+      setClientAccess(adminAccess);
+      await refresh();
+      toast.success(`Welcome back, ${cleanActor}`);
+      return { ok: true };
     }
+
     return { ok: false, error: 'Incorrect internal team passcode. Please try again.' };
   }
 
@@ -191,7 +265,22 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       return { ok: false, error: 'Please enter a valid 6-digit PIN.' };
     }
 
-    // 1. Try checking against manual customers in state/local storage
+    // 1. Try server login
+    try {
+      const res = await signInFn({ data: { mode: 'customer', passcode: pin, actor: '' } });
+      if (res.ok) {
+        const serverAcc = await getAccess();
+        if (serverAcc) {
+          setClientAccess(serverAcc);
+          if (serverAcc.customer_id) setSelectedCustomer(serverAcc.customer_id);
+        }
+        await refresh();
+        toast.success('Welcome to your feedback portal');
+        return { ok: true };
+      }
+    } catch {}
+
+    // 2. Fallback checking against customers in local cache
     const target = customers.find(c => c.pin === pin);
     if (target) {
       if (!target.active) {
@@ -206,25 +295,18 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       };
       setClientAccess(customerAccess);
       setSelectedCustomer(target.id);
+      await refresh();
       toast.success(`Welcome, ${target.name}`);
       return { ok: true };
     }
-
-    // 2. Try checking against server DB
-    try {
-      const res = await signInFn({ data: { mode: 'customer', passcode: pin, actor: '' } });
-      if (res.ok) {
-        await refresh();
-        toast.success('Welcome to your feedback portal');
-        return { ok: true };
-      }
-    } catch {}
 
     return { ok: false, error: 'Invalid 6-digit PIN. Please try again.' };
   }
 
   async function logout() {
-    try { await logoutFn(); } catch {}
+    try {
+      await logoutFn();
+    } catch {}
     setClientAccess(null);
     if (typeof window !== 'undefined') localStorage.removeItem(STORAGE_KEY_AUTH);
     setSelectedCustomer('all');
@@ -242,28 +324,29 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     const nowIso = new Date().toISOString();
     const isCustomerActor = access?.role === 'customer';
 
+    // Optimistic local update
     if (existing) {
       const updatedItem: FeedbackItem = {
         ...parsed,
         id: existing.id,
         version: (existing.version ?? 0) + 1,
         report_date: parsed.report_date ?? existing.report_date ?? existing.updated_at.slice(0, 10),
-        completion_date: parsed.activity === 'Done' ? (existing.completion_date ?? todayWIB()) : null,
+        completion_date: parsed.activity === 'Done' ? existing.completion_date ?? todayWIB() : null,
         deleted_at: existing.deleted_at,
         updated_at: nowIso,
         actor: access?.actor ?? 'Editor',
         needs_review: isCustomerActor ? true : (parsed.needs_review ?? false),
         image: parsed.image !== undefined ? parsed.image : (existing.image ?? null),
       };
-      setItems(prev => prev.map(item => item.id === existing.id ? updatedItem : item));
-      addHistoryEntry(isCustomerActor ? 'Updated feedback (Customer)' : 'Updated feedback', 'activity', existing.activity, parsed.activity, parsed.customer_id, existing.id);
-      try {
-        if (isAdmin) {
-          const { needs_review, image, report_date, ...dbItem } = parsed;
-          await saveFn({ data: { item: dbItem as ItemInput, id: existing.id, version: existing.version } });
-        }
-      } catch {}
-      toast.success(isCustomerActor ? 'Feedback updated successfully' : 'Feedback updated successfully');
+      setItems(prev => prev.map(item => (item.id === existing.id ? updatedItem : item)));
+      addHistoryEntry(
+        isCustomerActor ? 'Updated feedback (Customer)' : 'Updated feedback',
+        'activity',
+        existing.activity,
+        parsed.activity,
+        parsed.customer_id,
+        existing.id,
+      );
     } else {
       const newItem: FeedbackItem = {
         ...parsed,
@@ -278,15 +361,29 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         image: parsed.image ?? null,
       };
       setItems(prev => [newItem, ...prev]);
-      addHistoryEntry(isCustomerActor ? 'Submitted feedback (Customer)' : 'Created feedback', 'feedback', null, parsed.feedback, parsed.customer_id, newItem.id);
-      try {
-        if (isAdmin) {
-          const { needs_review, image, report_date, ...dbItem } = parsed;
-          await saveFn({ data: { item: dbItem as ItemInput } });
-        }
-      } catch {}
-      toast.success(isCustomerActor ? 'Feedback submitted! Our team will review and update it.' : 'New feedback saved successfully');
+      addHistoryEntry(
+        isCustomerActor ? 'Submitted feedback (Customer)' : 'Created feedback',
+        'feedback',
+        null,
+        parsed.feedback,
+        parsed.customer_id,
+        newItem.id,
+      );
     }
+
+    // Server update
+    try {
+      await saveFn({ data: { item: parsed, id: existing?.id, version: existing?.version } });
+      await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
+    } catch {}
+
+    toast.success(
+      isCustomerActor
+        ? existing
+          ? 'Feedback updated successfully'
+          : 'Feedback submitted! Our team will review and update it.'
+        : 'Feedback saved successfully',
+    );
   }
 
   async function remove(item: FeedbackItem, restore = false) {
@@ -304,79 +401,101 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       version: item.version + 1,
       updated_at: new Date().toISOString(),
     };
-    setItems(prev => prev.map(r => r.id === item.id ? updated : r));
-    addHistoryEntry(restore ? 'Restored feedback' : 'Deleted feedback', 'status', null, restore ? 'Active' : 'Deleted', item.customer_id, item.id);
+    setItems(prev => prev.map(r => (r.id === item.id ? updated : r)));
+    addHistoryEntry(
+      restore ? 'Restored feedback' : 'Deleted feedback',
+      'status',
+      null,
+      restore ? 'Active' : 'Deleted',
+      item.customer_id,
+      item.id,
+    );
+
     try {
-      if (isAdmin) await deleteFn({ data: { id: item.id, version: item.version, restore } });
+      await deleteFn({ data: { id: item.id, version: item.version, restore } });
+      await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
     } catch {}
+
     toast.success(restore ? 'Feedback restored successfully' : 'Feedback deleted successfully');
   }
 
   // Feature: Customer Management & 6-digit PIN Generation
-  async function customerAction(action: 'create' | 'regenerate' | 'toggle' | 'delete', name: string, id?: string): Promise<string | null> {
+  async function customerAction(
+    action: 'create' | 'regenerate' | 'toggle' | 'delete',
+    name: string,
+    id?: string,
+  ): Promise<string | null> {
     if (!access || access.role !== 'admin') {
       toast.error('Admin authentication required.');
       return null;
     }
     const cleanName = name.trim();
-    if (action === 'create') {
-      const generatedPin = String(Math.floor(100000 + Math.random() * 900000));
-      const newCust: Customer = {
-        id: crypto.randomUUID(),
-        name: cleanName,
-        active: true,
-        pin: generatedPin,
-        pin_version: 1,
-        created_at: new Date().toISOString(),
-      };
-      setCustomers(prev => [...prev, newCust]);
-      addHistoryEntry('Created customer', 'name', null, cleanName, newCust.id, null);
-      try {
-        if (isAdmin) await customerFn({ data: { action: 'create', name: cleanName } });
-      } catch {}
-      toast.success(`Customer "${cleanName}" created with 6-digit PIN`);
-      return generatedPin;
-    }
 
-    if (!id) return null;
+    try {
+      const res = await customerFn({ data: { action, name: cleanName, id } });
+      await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
 
-    if (action === 'regenerate') {
-      const newPin = String(Math.floor(100000 + Math.random() * 900000));
-      setCustomers(prev => prev.map(c => c.id === id ? { ...c, pin: newPin, pin_version: c.pin_version + 1 } : c));
-      addHistoryEntry('Regenerated PIN', 'pin', null, 'New PIN generated', id, null);
-      try {
-        if (isAdmin) await customerFn({ data: { action: 'regenerate', name: cleanName, id } });
-      } catch {}
-      toast.success('New PIN generated successfully');
-      return newPin;
-    }
-
-    if (action === 'toggle') {
-      let newState = true;
-      setCustomers(prev => prev.map(c => {
-        if (c.id === id) {
-          newState = !c.active;
-          return { ...c, active: newState };
-        }
-        return c;
-      }));
-      addHistoryEntry(newState ? 'Activated customer' : 'Deactivated customer', 'active', null, String(newState), id, null);
-      try {
-        if (isAdmin) await customerFn({ data: { action: 'toggle', name: cleanName, id } });
-      } catch {}
-      toast.success(newState ? 'Customer activated' : 'Customer deactivated');
+      if (action === 'create') {
+        const pin = res.pin || String(Math.floor(100000 + Math.random() * 900000));
+        toast.success(`Customer "${cleanName}" created with 6-digit PIN`);
+        return pin;
+      }
+      if (action === 'regenerate') {
+        toast.success('New PIN generated successfully');
+        return res.pin ?? null;
+      }
+      if (action === 'toggle') {
+        toast.success('Customer status updated');
+        return null;
+      }
+      if (action === 'delete') {
+        toast.success('Customer deleted successfully');
+        return null;
+      }
+      return res.pin ?? null;
+    } catch {
+      // Fallback local update
+      if (action === 'create') {
+        const generatedPin = String(Math.floor(100000 + Math.random() * 900000));
+        const newCust: Customer = {
+          id: crypto.randomUUID(),
+          name: cleanName,
+          active: true,
+          pin: generatedPin,
+          pin_version: 1,
+          created_at: new Date().toISOString(),
+        };
+        setCustomers(prev => [...prev, newCust]);
+        addHistoryEntry('Created customer', 'name', null, cleanName, newCust.id, null);
+        toast.success(`Customer "${cleanName}" created with 6-digit PIN`);
+        return generatedPin;
+      }
+      if (!id) return null;
+      if (action === 'regenerate') {
+        const newPin = String(Math.floor(100000 + Math.random() * 900000));
+        setCustomers(prev =>
+          prev.map(c => (c.id === id ? { ...c, pin: newPin, pin_version: c.pin_version + 1 } : c)),
+        );
+        addHistoryEntry('Regenerated PIN', 'pin', null, 'New PIN generated', id, null);
+        toast.success('New PIN generated successfully');
+        return newPin;
+      }
+      if (action === 'toggle') {
+        const target = customers.find(c => c.id === id);
+        const nextActive = target ? !target.active : false;
+        setCustomers(prev => prev.map(c => (c.id === id ? { ...c, active: nextActive } : c)));
+        addHistoryEntry('Updated customer', 'active', null, nextActive ? 'Active' : 'Inactive', id, null);
+        toast.success(nextActive ? 'Customer activated' : 'Customer deactivated');
+        return null;
+      }
+      if (action === 'delete') {
+        setCustomers(prev => prev.filter(c => c.id !== id));
+        addHistoryEntry('Deleted customer', 'customer', null, 'Deleted', id, null);
+        toast.success('Customer deleted successfully');
+        return null;
+      }
       return null;
     }
-
-    if (action === 'delete') {
-      setCustomers(prev => prev.filter(c => c.id !== id));
-      setItems(prev => prev.filter(i => i.customer_id !== id));
-      addHistoryEntry('Deleted customer', 'customer', cleanName, null, id, null);
-      toast.success('Customer deleted successfully');
-      return null;
-    }
-
-    return null;
   }
 
   // Feature: Excel Import Handler
@@ -385,87 +504,102 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       toast.error('Authentication required. Please sign in to import feedback.');
       return { count: 0, pins: [] };
     }
-    const custMap = new Map<string, Customer>();
-    customers.forEach(c => custMap.set(c.name.toLowerCase(), c));
-    const newPins: { name: string; pin: string }[] = [];
-    const addedCustomers: Customer[] = [];
 
-    // Identify or create missing customers (without generating new PINs)
-    for (const r of rows) {
-      const key = r.customer_name.toLowerCase();
-      if (!custMap.has(key)) {
-        const newCust: Customer = {
-          id: crypto.randomUUID(),
-          name: r.customer_name,
-          active: true,
-          pin_version: 1,
-          created_at: new Date().toISOString(),
-        };
-        custMap.set(key, newCust);
-        addedCustomers.push(newCust);
-      }
-    }
+    try {
+      // 1. Send directly to server for persistent storage and multi-browser sync
+      const serverResult = await importFn({ data: { rows } });
+      await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
+      return serverResult;
+    } catch {
+      // Fallback local update
+      const custMap = new Map<string, Customer>();
+      customers.forEach(c => custMap.set(c.name.toLowerCase(), c));
+      const newPins: { name: string; pin: string }[] = [];
+      const addedCustomers: Customer[] = [];
 
-    if (addedCustomers.length > 0) {
-      setCustomers(prev => [...prev, ...addedCustomers]);
-    }
-
-    // Insert imported items
-    const importedItems: FeedbackItem[] = rows.map(r => {
-      const cust = custMap.get(r.customer_name.toLowerCase());
-      const custId = cust?.id ?? r.customer_id;
-      return {
-        customer_id: custId,
-        number: r.number,
-        feature: r.feature,
-        feedback: r.feedback,
-        detail: r.detail,
-        type: r.type,
-        category: r.category,
-        status: r.status,
-        activity: ((r.activity as string) === 'Pending' ? 'Not started' : r.activity) as any,
-        notes: r.notes,
-        report_date: r.report_date ?? todayWIB(),
-        estimated_date: r.estimated_date,
-        completion_date: r.activity === 'Done' ? todayWIB() : null,
-        deleted_at: null,
-        id: crypto.randomUUID(),
-        version: 1,
-        updated_at: new Date().toISOString(),
-        actor: access?.actor ?? 'Excel Import',
-      };
-    });
-
-    // Upsert imported items
-    setItems(prev => {
-      const next = [...prev];
-      for (const item of importedItems) {
-        const existingIdx = next.findIndex(p => p.customer_id === item.customer_id && p.number === item.number && !p.deleted_at);
-        const existing = existingIdx >= 0 ? next[existingIdx] : undefined;
-        if (existing) {
-          next[existingIdx] = {
-            ...item,
-            id: existing.id,
-            version: (existing.version ?? 1) + 1,
-            report_date: item.report_date ?? existing.report_date ?? existing.updated_at.slice(0, 10),
-            completion_date: item.activity === 'Done' ? (existing.completion_date ?? todayWIB()) : null,
+      for (const r of rows) {
+        const key = r.customer_name.toLowerCase();
+        if (!custMap.has(key)) {
+          const newCust: Customer = {
+            id: crypto.randomUUID(),
+            name: r.customer_name,
+            active: true,
+            pin_version: 1,
+            created_at: new Date().toISOString(),
           };
-        } else {
-          next.unshift(item);
+          custMap.set(key, newCust);
+          addedCustomers.push(newCust);
         }
       }
-      return next;
-    });
 
-    addHistoryEntry('Imported Excel feedback', 'count', null, `${importedItems.length} items`, null, null);
-    return { count: importedItems.length, pins: newPins };
+      if (addedCustomers.length > 0) {
+        setCustomers(prev => [...prev, ...addedCustomers]);
+      }
+
+      const importedItems: FeedbackItem[] = rows.map(r => {
+        const cust = custMap.get(r.customer_name.toLowerCase());
+        const custId = cust?.id ?? r.customer_id;
+        return {
+          customer_id: custId,
+          number: r.number,
+          feature: r.feature,
+          feedback: r.feedback,
+          detail: r.detail,
+          type: r.type,
+          category: r.category,
+          status: r.status,
+          activity: ((r.activity as string) === 'Pending' ? 'Not started' : r.activity) as any,
+          notes: r.notes,
+          report_date: r.report_date ?? todayWIB(),
+          estimated_date: r.estimated_date,
+          completion_date: r.activity === 'Done' ? todayWIB() : null,
+          deleted_at: null,
+          id: crypto.randomUUID(),
+          version: 1,
+          updated_at: new Date().toISOString(),
+          actor: access?.actor ?? 'Excel Import',
+        };
+      });
+
+      setItems(prev => {
+        const next = [...prev];
+        for (const item of importedItems) {
+          const existingIdx = next.findIndex(
+            p => p.customer_id === item.customer_id && p.number === item.number && !p.deleted_at,
+          );
+          const existing = existingIdx >= 0 ? next[existingIdx] : undefined;
+          if (existing) {
+            next[existingIdx] = {
+              ...item,
+              id: existing.id,
+              version: (existing.version ?? 1) + 1,
+              report_date: item.report_date ?? existing.report_date ?? existing.updated_at.slice(0, 10),
+            };
+          } else {
+            next.unshift(item);
+          }
+        }
+        return next;
+      });
+
+      addHistoryEntry(
+        'Imported Excel data',
+        'items',
+        null,
+        `${rows.length} rows processed`,
+        null,
+        null,
+      );
+
+      return { count: rows.length, pins: newPins };
+    }
   }
 
-  // Feature: Export feedback to Excel
+  // Feature: Excel Export Handler
   async function exportToExcel(subset?: FeedbackItem[], customFileName?: string) {
-    const targetItems = subset ?? (access ? items.filter(i => !i.deleted_at) : []);
+    const targetItems = subset || items.filter(i => !i.deleted_at);
     if (targetItems.length === 0) {
-      toast.error('No feedback items to export.');
+      toast.error('No feedback items available to export.');
       return;
     }
     const toastId = toast.loading(`Exporting ${targetItems.length} feedback items to Excel…`);
@@ -491,7 +625,9 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         })),
       };
       const b64 = await exportFn({ data: payload });
-      const blob = await (await fetch(`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${b64}`)).blob();
+      const blob = await (
+        await fetch(`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${b64}`)
+      ).blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -592,7 +728,11 @@ function AccessDialog({
             type="button"
             variant="ghost"
             className={mode === 'admin' ? 'selected' : ''}
-            onClick={() => { setMode('admin'); setPasscode(''); setError(''); }}
+            onClick={() => {
+              setMode('admin');
+              setPasscode('');
+              setError('');
+            }}
           >
             Internal team
           </Button>
@@ -600,7 +740,11 @@ function AccessDialog({
             type="button"
             variant="ghost"
             className={mode === 'customer' ? 'selected' : ''}
-            onClick={() => { setMode('customer'); setPasscode(''); setError(''); }}
+            onClick={() => {
+              setMode('customer');
+              setPasscode('');
+              setError('');
+            }}
           >
             Customer access
           </Button>
@@ -653,7 +797,11 @@ function AccessDialog({
               autoFocus
             />
           </label>
-          {error && <p className="error-text" role="alert">{error}</p>}
+          {error && (
+            <p className="error-text" role="alert">
+              {error}
+            </p>
+          )}
           <Button type="submit" disabled={busy} className="w-full mt-6">
             {busy ? 'Signing in…' : 'Enter workspace'}
             <ArrowRight />

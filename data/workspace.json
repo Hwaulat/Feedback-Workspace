@@ -1,0 +1,35 @@
+{
+  "customers": [
+    {
+      "id": "22222222-2222-2222-2222-222222222222",
+      "name": "Client Alpha",
+      "active": true,
+      "pin_version": 1,
+      "created_at": "2026-10-14T08:00:00.000Z",
+      "pin": "123456",
+      "pin_hash": "96f111d0df6a5a0f9eb6238be316494c69fdd1fbd895819ef5b8119a5d0fe372"
+    }
+  ],
+  "items": [
+    {
+      "id": "11111111-1111-1111-1111-111111111111",
+      "customer_id": "22222222-2222-2222-2222-222222222222",
+      "number": 1,
+      "feature": "UI",
+      "feedback": "Uploaded in Chrome",
+      "detail": "",
+      "type": "Complaint",
+      "category": "Minor",
+      "status": "Execution",
+      "activity": "Done",
+      "notes": "",
+      "estimated_date": null,
+      "completion_date": "2026-10-14",
+      "deleted_at": null,
+      "version": 1,
+      "updated_at": "2026-10-14T08:00:00.000Z",
+      "actor": "Chrome User"
+    }
+  ],
+  "history": []
+}

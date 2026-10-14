@@ -495,9 +495,21 @@ function Overview() {
                         )}
                       </td>
                     )}
-                    <td>{item.type}</td>
-                    <td><span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span></td>
-                    <td><span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span></td>
+                    <td>{access?.role === 'customer' && item.needs_review ? <span className="text-muted-foreground">—</span> : item.type}</td>
+                    <td>
+                      {access?.role === 'customer' && item.needs_review ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span>
+                      )}
+                    </td>
+                    <td>
+                      {access?.role === 'customer' && item.needs_review ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
+                      )}
+                    </td>
                     <td>
                       {fmtDate(item.estimated_date)}
                       {isOverdue(item) && <span className="badge major" style={{ marginLeft: 6 }}>Overdue</span>}
@@ -591,10 +603,22 @@ function Overview() {
                                 )}
                               </td>
                             )}
-                            <td>{item.type}</td>
-                            <td><span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span></td>
+                            <td>{access?.role === 'customer' && item.needs_review ? <span className="text-muted-foreground">—</span> : item.type}</td>
+                            <td>
+                              {access?.role === 'customer' && item.needs_review ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                <span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span>
+                              )}
+                            </td>
                             <td><span className={`badge ${statusBadge(item.status)}`}>{item.status}</span></td>
-                            <td><span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span></td>
+                            <td>
+                              {access?.role === 'customer' && item.needs_review ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
+                              )}
+                            </td>
                             <td style={{ maxWidth: 240, whiteSpace: 'normal' }} title={item.notes || undefined}>
                               {item.notes ? (
                                 <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>

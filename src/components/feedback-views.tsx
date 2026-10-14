@@ -302,6 +302,8 @@ export function DetailModal({
   const [zoomImage, setZoomImage] = useState(false);
   const customer = customers.find(c => c.id === item.customer_id);
   const showReview = access?.role !== 'customer';
+  const isCustomer = access?.role === 'customer';
+  const isPendingInternalReview = isCustomer && Boolean(item.needs_review);
   return (
     <div
       className={drawer ? 'modal-overlay-drawer' : 'modal-overlay'}
@@ -330,12 +332,35 @@ export function DetailModal({
               </dd>
             </div>
           )}
-          <div><dt>Type</dt><dd>{item.type}</dd></div>
-          <div><dt>Category</dt><dd><span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span></dd></div>
+          <div><dt>Type</dt><dd>{isPendingInternalReview ? <span className="text-muted-foreground">—</span> : item.type}</dd></div>
+          <div>
+            <dt>Category</dt>
+            <dd>
+              {isPendingInternalReview ? (
+                <span className="text-muted-foreground">—</span>
+              ) : (
+                <span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span>
+              )}
+            </dd>
+          </div>
           <div><dt>Status</dt><dd><span className={`badge ${statusBadge(item.status)}`}>{item.status}</span></dd></div>
-          <div><dt>Activity</dt><dd><span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span></dd></div>
-          <div><dt>Estimated completion</dt><dd>{fmtDate(item.estimated_date)}</dd></div>
+          <div>
+            <dt>Activity</dt>
+            <dd>
+              {isPendingInternalReview ? (
+                <span className="text-muted-foreground">—</span>
+              ) : (
+                <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
+              )}
+            </dd>
+          </div>
+          <div><dt>Estimated completion</dt><dd>{isPendingInternalReview ? <span className="text-muted-foreground">—</span> : fmtDate(item.estimated_date)}</dd></div>
           <div><dt>Completion date (automatic)</dt><dd>{fmtDate(item.completion_date)}</dd></div>
+          {isPendingInternalReview && (
+            <div className="full" style={{ padding: '6px 12px', background: 'var(--secondary)', borderRadius: 6, fontSize: 13, color: 'var(--muted-foreground)' }}>
+              ℹ️ <em>Type, Category, and Activity status are currently pending review and will be assigned by the internal team.</em>
+            </div>
+          )}
           <div className="full"><dt>Feedback</dt><dd>{item.feedback}</dd></div>
           {item.detail && <div className="full"><dt>Detail information</dt><dd>{item.detail}</dd></div>}
           {item.image && (
@@ -469,7 +494,7 @@ export function FormModal({
         notes: item.notes,
         report_date: item.report_date ?? item.updated_at.slice(0, 10),
         estimated_date: item.estimated_date,
-        needs_review: item.needs_review ?? false,
+        needs_review: !isCustomer && item.needs_review ? false : (item.needs_review ?? false),
         image: item.image ?? null,
       }
     : {
@@ -570,7 +595,7 @@ export function FormModal({
                   gap: 8,
                 }}
               >
-                <span><strong>Action required:</strong> Added by customer. Please update Type, Category, Status, Activity, and Estimated Date.</span>
+                <span><strong>Action required:</strong> Added by customer. Please update Type, Category, Status, Activity, and Estimated Date. Saving this feedback will complete triage and publish Type, Category & Activity to the customer.</span>
               </div>
             )}
 
@@ -703,7 +728,7 @@ export function FormModal({
                     style={{ width: 'auto', margin: 0 }}
                   />
                   <span style={{ fontSize: 14 }}>
-                    <strong>Needs Update</strong> (Flag as newly added by customer awaiting triage/update)
+                    <strong>Keep as "Needs Update"</strong> (Check only if this item still requires further triage; leave unchecked to publish Type, Category & Activity to customer)
                   </span>
                 </label>
               </>

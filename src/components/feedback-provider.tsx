@@ -652,20 +652,23 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     const toastId = toast.loading(`Exporting ${targetItems.length} feedback items to Excel…`);
     try {
       const payload = {
-        items: targetItems.map(i => ({
-          customer_id: i.customer_id,
-          number: i.number,
-          feature: i.feature,
-          feedback: i.feedback,
-          detail: i.detail,
-          type: i.type,
-          category: i.category,
-          status: i.status,
-          activity: i.activity,
-          notes: i.notes,
-          report_date: i.report_date ?? i.updated_at.slice(0, 10),
-          estimated_date: i.estimated_date,
-        })),
+        items: targetItems.map(i => {
+          const isPendingCust = access?.role === 'customer' && Boolean(i.needs_review);
+          return {
+            customer_id: i.customer_id,
+            number: i.number,
+            feature: i.feature,
+            feedback: i.feedback,
+            detail: i.detail,
+            type: isPendingCust ? '' : i.type,
+            category: isPendingCust ? '' : i.category,
+            status: i.status,
+            activity: isPendingCust ? '' : i.activity,
+            notes: i.notes,
+            report_date: i.report_date ?? i.updated_at.slice(0, 10),
+            estimated_date: isPendingCust ? null : i.estimated_date,
+          };
+        }),
         customers: customers.map(c => ({
           id: c.id,
           name: c.name,

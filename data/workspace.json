@@ -48,6 +48,28 @@
   ],
   "items": [
     {
+      "id": "8a00e1b3-3fb2-4a5f-830d-b1a78f09139f",
+      "customer_id": "6de58588-dbd1-404c-82b8-8cbca6fdfad6",
+      "number": 65,
+      "feature": "a",
+      "feedback": "ada",
+      "detail": "ada",
+      "type": "Bug Report",
+      "category": "Minor",
+      "status": "Waiting",
+      "activity": "Not started",
+      "notes": "",
+      "report_date": "2026-10-14",
+      "estimated_date": null,
+      "completion_date": null,
+      "needs_review": false,
+      "image": null,
+      "deleted_at": "2026-10-14T10:05:24.926+00:00",
+      "updated_at": "2026-10-14T10:06:07.654716+00:00",
+      "version": 3,
+      "actor": "Hasan"
+    },
+    {
       "customer_id": "3afc375d-d0dc-4138-835e-7734634b38de",
       "number": 1,
       "feature": "Auth",
@@ -1389,7 +1411,7 @@
       "deleted_at": null,
       "updated_at": "2026-10-14T10:07:38.387Z",
       "actor": "Hasan",
-      "needs_review": false,
+      "needs_review": true,
       "image": null
     }
   ],

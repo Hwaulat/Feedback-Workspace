@@ -235,6 +235,9 @@ export const saveItem = createServerFn({ method: 'POST' })
 
     const nowIso = new Date().toISOString();
     let saved: FeedbackItem | null = null;
+    const isCustomerActor = access.role === 'customer';
+    const resolvedNeedsReview = isCustomerActor ? true : (data.item.needs_review ?? false);
+    const resolvedImage = data.item.image !== undefined ? data.item.image : null;
     const { needs_review: _nr, image: _img, ...dbItem } = data.item;
 
     // 1. Primary: Save to Supabase Cloud
@@ -246,6 +249,8 @@ export const saveItem = createServerFn({ method: 'POST' })
             .from('feedback_items')
             .update({
               ...dbItem,
+              needs_review: resolvedNeedsReview,
+              image: resolvedImage,
               report_date: data.item.report_date ?? null,
               actor: access.actor,
               version: (data.version ?? 1) + 1,
@@ -268,6 +273,8 @@ export const saveItem = createServerFn({ method: 'POST' })
             .from('feedback_items')
             .insert({
               ...dbItem,
+              needs_review: resolvedNeedsReview,
+              image: resolvedImage,
               report_date: data.item.report_date ?? null,
               actor: access.actor,
               version: 1,

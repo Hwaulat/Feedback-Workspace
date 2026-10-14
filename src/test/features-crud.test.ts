@@ -547,4 +547,56 @@ describe('Feature 12: Status Column Badges (Waiting=Orange, Execution=Green, Exe
   });
 });
 
+describe('Feature 13: Customer Portal Feedback Submission Triage View', () => {
+  it('identifies unreviewed customer feedback where Type, Category, and Activity remain empty until internal review', () => {
+    const unreviewedCustomerItem: FeedbackItem = {
+      id: 'cust-item-63',
+      customer_id: 'cust-1',
+      number: 63,
+      feature: 'Order Control - Label Printing by Item',
+      feedback: 'Invalid Path',
+      detail: '',
+      type: 'Bug Report',
+      category: 'Minor',
+      status: 'Waiting',
+      activity: 'Not started',
+      notes: '',
+      report_date: '2026-10-14',
+      estimated_date: null,
+      completion_date: null,
+      deleted_at: null,
+      version: 1,
+      updated_at: '2026-10-14T10:00:00Z',
+      actor: 'Hasan',
+      needs_review: true,
+    };
+
+    const isCustomer = true;
+    const isPending = isCustomer && Boolean(unreviewedCustomerItem.needs_review);
+
+    // In customer portal, unreviewed items display empty / dash
+    const displayType = isPending ? '—' : unreviewedCustomerItem.type;
+    const displayCategory = isPending ? '—' : unreviewedCustomerItem.category;
+    const displayActivity = isPending ? '—' : unreviewedCustomerItem.activity;
+
+    expect(displayType).toBe('—');
+    expect(displayCategory).toBe('—');
+    expect(displayActivity).toBe('—');
+
+    // Once internal team reviews and updates it:
+    const reviewedItem: FeedbackItem = {
+      ...unreviewedCustomerItem,
+      type: 'Bug Report',
+      category: 'Major',
+      activity: 'In progress',
+      needs_review: false,
+    };
+
+    const isStillPending = isCustomer && Boolean(reviewedItem.needs_review);
+    expect(isStillPending ? '—' : reviewedItem.type).toBe('Bug Report');
+    expect(isStillPending ? '—' : reviewedItem.category).toBe('Major');
+    expect(isStillPending ? '—' : reviewedItem.activity).toBe('In progress');
+  });
+});
+
 

@@ -18,6 +18,7 @@ function FeedbackPage() {
   const [viewTrash, setViewTrash] = useState(false);
   const [detail, setDetail] = useState<FeedbackItem | null>(null); const [editing, setEditing] = useState<FeedbackItem | null>(null); const [creating, setCreating] = useState(false);
   const canManage = access?.role === 'admin';
+  const isCustomer = access?.role === 'customer';
 
   const trashCount = useMemo(
     () => items.filter(i => Boolean(i.deleted_at) && (selectedCustomer === 'all' || i.customer_id === selectedCustomer)).length,
@@ -27,12 +28,12 @@ function FeedbackPage() {
   const rows = useMemo(() => items
     .filter(i => (viewTrash ? Boolean(i.deleted_at) : !i.deleted_at)
       && (selectedCustomer === 'all' || i.customer_id === selectedCustomer)
-      && (type === 'all' || i.type === type)
+      && (type === 'all' || (isCustomer && i.needs_review ? false : i.type === type))
       && (status === 'all' || i.status === status)
-      && (activity === 'all' || i.activity === activity || (activity === 'Not started' && (i.activity as string) === 'Pending'))
+      && (activity === 'all' || (isCustomer && i.needs_review ? false : i.activity === activity || (activity === 'Not started' && (i.activity as string) === 'Pending')))
       && (reviewFilter === 'all' || (reviewFilter === 'needs_update' ? Boolean(i.needs_review) : !i.needs_review))
       && (search === '' || `${i.feature} ${i.feedback} ${i.notes} ${i.detail}`.toLowerCase().includes(search.toLowerCase())))
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search]);
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search, isCustomer]);
 
   const open = (item: FeedbackItem) => (canManage ? setEditing(item) : setDetail(item));
   const needsUpdateCount = items.filter(i => !i.deleted_at && i.needs_review).length;
@@ -225,10 +226,22 @@ function FeedbackPage() {
                         )}
                       </td>
                     )}
-                    <td>{item.type}</td>
-                    <td><span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span></td>
+                    <td>{isCustomer && item.needs_review ? <span className="text-muted-foreground">—</span> : item.type}</td>
+                    <td>
+                      {isCustomer && item.needs_review ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span>
+                      )}
+                    </td>
                     <td><span className={`badge ${statusBadge(item.status)}`}>{item.status}</span></td>
-                    <td><span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span></td>
+                    <td>
+                      {isCustomer && item.needs_review ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
+                      )}
+                    </td>
                     <td>{fmtDate(item.report_date ?? item.updated_at.slice(0, 10))}</td>
                     <td>{fmtDate(item.estimated_date)}{isOverdue(item) && <span className="badge major" style={{ marginLeft: 6 }}>Overdue</span>}</td>
                     <td title={fmtDateTime(item.updated_at)}>{fmtDate(item.updated_at)}</td>
@@ -303,8 +316,14 @@ function FeedbackPage() {
                   </span>
                 )}
                 <span className={`badge ${statusBadge(item.status)}`}>{item.status}</span>
-                <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
-                <span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span>
+                {isCustomer && item.needs_review ? (
+                  <span className="text-xs text-muted-foreground italic">Type, Category & Activity pending review</span>
+                ) : (
+                  <>
+                    <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
+                    <span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span>
+                  </>
+                )}
                 <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }} title="Report date">
                   Report: {fmtDate(item.report_date ?? item.updated_at.slice(0, 10))}
                 </span>

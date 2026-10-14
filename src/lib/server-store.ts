@@ -47,12 +47,18 @@ export async function readServerStore(): Promise<ServerWorkspaceData> {
 export async function writeServerStore(data: ServerWorkspaceData): Promise<void> {
   await ensureDataDir();
   // Queue writes sequentially to avoid race conditions
-  writeLock = writeLock.then(async () => {
-    const tmp = `${DB_FILE}.${randomUUID()}.tmp`;
-    const json = JSON.stringify(data, null, 2);
-    await fs.writeFile(tmp, json, 'utf8');
-    await fs.rename(tmp, DB_FILE);
-  });
+  writeLock = writeLock
+    .then(async () => {
+      try {
+        const tmp = `${DB_FILE}.${randomUUID()}.tmp`;
+        const json = JSON.stringify(data, null, 2);
+        await fs.writeFile(tmp, json, 'utf8');
+        await fs.rename(tmp, DB_FILE);
+      } catch (err) {
+        // Read-only serverless filesystems (e.g. Vercel) - storage is handled by Supabase
+      }
+    })
+    .catch(() => {});
   return writeLock;
 }
 

@@ -58,6 +58,12 @@ function createSupabaseAdminClient() {
 
 let _supabaseAdmin: ReturnType<typeof createSupabaseAdminClient> | undefined;
 
+export function hasSupabaseAdmin(): boolean {
+  const url = process.env['SUPABASE_URL'];
+  const key = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'];
+  return Boolean(url && key);
+}
+
 // Server-side Supabase client with service role - bypasses RLS
 // SECURITY: Only use this for trusted server-side operations, never expose to client code
 // Load inside server handlers: const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -68,3 +74,4 @@ export const supabaseAdmin = new Proxy({} as ReturnType<typeof createSupabaseAdm
     return Reflect.get(_supabaseAdmin, prop, receiver);
   },
 });
+

@@ -16,7 +16,12 @@ function HistoryInner() {
   return (
     <>
       <div className="page-heading"><div><h1>Change history</h1><p>Who changed what, and when — recorded automatically.</p></div></div>
-      {history.length === 0 ? <div className="empty-state">No changes recorded yet.</div> : (
+      {history.length === 0 ? (
+        <div className="empty-state">
+          <p className="font-medium text-base mb-1">No activity history yet.</p>
+          <p className="text-muted-foreground text-sm">Every feedback creation, status update, customer PIN change, and data reset will be logged here automatically.</p>
+        </div>
+      ) : (
         <div className="history-list">
           {history.map(h => {
             const customer = customers.find(c => c.id === h.customer_id);

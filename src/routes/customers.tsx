@@ -36,7 +36,15 @@ function CustomersInner() {
         <div className="heading-actions"><Button size="sm" onClick={() => setCreating(true)}><Plus />New customer</Button></div>
       </div>
       {error && <p className="error-text" role="alert">{error}</p>}
-      {customers.length === 0 ? <div className="empty-state">No customers yet. Create the first one to start recording feedback.</div> : (
+      {customers.length === 0 ? (
+        <div className="empty-state">
+          <p className="font-medium text-base mb-1">No registered customers yet.</p>
+          <p className="text-muted-foreground text-sm mb-4">Add customers manually. The system will automatically generate a 6-digit access PIN for each customer.</p>
+          <Button size="sm" onClick={() => setCreating(true)}>
+            <Plus /> Add new customer
+          </Button>
+        </div>
+      ) : (
         <div className="customer-grid">
           {customers.map(c => {
             const count = items.filter(i => i.customer_id === c.id && !i.deleted_at).length;
@@ -50,10 +58,12 @@ function CustomersInner() {
                 <div className="customer-stats">
                   <div><strong>{count}</strong><span>Feedback items</span></div>
                   <div><strong>v{c.pin_version}</strong><span>PIN version</span></div>
+                  {c.pin && <div><strong>{c.pin}</strong><span>Active PIN</span></div>}
                 </div>
                 <div className="form-actions" style={{ marginTop: 18 }}>
                   <Button variant="outline" size="sm" disabled={busy} onClick={() => regenerate(c.id, c.name)}>Regenerate PIN</Button>
                   <Button variant="outline" size="sm" disabled={busy} onClick={() => customerAction('toggle', c.name, c.id)}>{c.active ? 'Deactivate' : 'Activate'}</Button>
+                  <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10" disabled={busy} onClick={() => customerAction('delete', c.name, c.id)}>Delete</Button>
                 </div>
               </div>
             );

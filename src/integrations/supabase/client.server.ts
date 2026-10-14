@@ -29,10 +29,73 @@ function createSupabaseFetch(supabaseKey: string): typeof fetch {
   };
 }
 
+function readEnvFile(name: string): string | undefined {
+  try {
+    if (typeof process !== 'undefined' && process.cwd) {
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const envPath = path.resolve(process.cwd(), '.env');
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf8');
+        const match = content.match(new RegExp(`^${name}=["']?([^"'\r\n]+)["']?`, 'm'));
+        if (match && match[1]) {
+          return match[1].trim();
+        }
+      }
+    }
+  } catch {}
+  return undefined;
+}
+
+function getEnvVar(name: string): string | undefined {
+  // Check .env file directly so real Supabase URLs are not overridden by Lovable mock proxy
+  const fromEnvFile = readEnvFile(name);
+  if (fromEnvFile && (!name.includes('URL') || !fromEnvFile.includes('lovable.cloud'))) {
+    return fromEnvFile;
+  }
+
+  const fromProcess = typeof process !== 'undefined' && process.env ? process.env[name] : undefined;
+  if (fromProcess && (!name.includes('URL') || !fromProcess.includes('lovable.cloud'))) {
+    return fromProcess;
+  }
+
+  try {
+    if (typeof import.meta !== 'undefined' && (import.meta as any).env?.[name]) {
+      const val = (import.meta as any).env[name];
+      if (typeof val === 'string' && (!name.includes('URL') || !val.includes('lovable.cloud'))) {
+        return val;
+      }
+    }
+  } catch {}
+
+  return fromProcess;
+}
+
+export function getSupabaseCredentials() {
+  let url =
+    getEnvVar('SUPABASE_URL') ||
+    getEnvVar('VITE_SUPABASE_URL');
+
+  // If URL is missing or set to lovable mock proxy, fallback to real Supabase project
+  if (!url || url.includes('lovable.cloud')) {
+    const projectId = getEnvVar('SUPABASE_PROJECT_ID') || getEnvVar('VITE_SUPABASE_PROJECT_ID') || 'wzqhxwaawzlfzqjwqcvn';
+    url = `https://${projectId}.supabase.co`;
+  }
+
+  const serviceKey =
+    getEnvVar('SUPABASE_SERVICE_ROLE_KEY') ||
+    getEnvVar('VITE_SUPABASE_SERVICE_ROLE_KEY');
+  const anonKey =
+    getEnvVar('SUPABASE_PUBLISHABLE_KEY') ||
+    getEnvVar('VITE_SUPABASE_PUBLISHABLE_KEY');
+
+  const key = serviceKey || anonKey;
+  return { url, key, isServiceRole: Boolean(serviceKey) };
+}
+
 function createSupabaseAdminClient() {
-  const rawUrl = process.env['SUPABASE_URL'];
+  const { url: rawUrl, key: SUPABASE_SERVICE_ROLE_KEY } = getSupabaseCredentials();
   const SUPABASE_URL = rawUrl ? rawUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/+$/, '') : rawUrl;
-  const SUPABASE_SERVICE_ROLE_KEY = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'];
 
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     const missing = [
@@ -43,6 +106,12 @@ function createSupabaseAdminClient() {
     console.error(`[Supabase] ${message}`);
     throw new Error(message);
   }
+
+  console.log('[Supabase Admin Client Initialized]:', {
+    url: SUPABASE_URL,
+    hasKey: Boolean(SUPABASE_SERVICE_ROLE_KEY),
+    keyPrefix: SUPABASE_SERVICE_ROLE_KEY.slice(0, 10) + '...',
+  });
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     global: {
@@ -59,8 +128,7 @@ function createSupabaseAdminClient() {
 let _supabaseAdmin: ReturnType<typeof createSupabaseAdminClient> | undefined;
 
 export function hasSupabaseAdmin(): boolean {
-  const url = process.env['SUPABASE_URL'];
-  const key = process.env['SUPABASE_SERVICE_ROLE_KEY'] || process.env['SUPABASE_PUBLISHABLE_KEY'];
+  const { url, key } = getSupabaseCredentials();
   return Boolean(url && key);
 }
 

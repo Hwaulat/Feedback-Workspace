@@ -35,23 +35,30 @@ export async function requireAccess(admin = false) {
   }
   if (access.role === 'customer') {
     try {
-      const { readServerStore } = await import('./server-store');
-      const store = await readServerStore();
-      const cust = store.customers.find(c => c.id === access.customer_id);
-      if (cust) {
-        if (!cust.active || cust.pin_version !== access.pin_version) {
-          await s.clear();
-          throw new Error('Your session has ended. Please enter your PIN again.');
-        }
-      } else {
-        // Fallback check against Supabase
-        const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
+      // 1. Primary check against Supabase Cloud
+      const { supabaseAdmin: db, hasSupabaseAdmin } = await import('@/integrations/supabase/client.server');
+      let checkedInSupabase = false;
+      if (hasSupabaseAdmin()) {
         const { data } = await db
           .from('feedback_customers')
           .select('active,pin_version')
           .eq('id', access.customer_id ?? '')
-          .single();
-        if (data && (!data.active || data.pin_version !== access.pin_version)) {
+          .maybeSingle();
+        if (data) {
+          checkedInSupabase = true;
+          if (!data.active || data.pin_version !== access.pin_version) {
+            await s.clear();
+            throw new Error('Your session has ended. Please enter your PIN again.');
+          }
+        }
+      }
+
+      // 2. Fallback check against server store
+      if (!checkedInSupabase) {
+        const { readServerStore } = await import('./server-store');
+        const store = await readServerStore();
+        const cust = store.customers.find(c => c.id === access.customer_id);
+        if (cust && (!cust.active || cust.pin_version !== access.pin_version)) {
           await s.clear();
           throw new Error('Your session has ended. Please enter your PIN again.');
         }

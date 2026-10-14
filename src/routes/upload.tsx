@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { useServerFn } from '@tanstack/react-start';
 import { FileUp, Download, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -134,6 +134,7 @@ function UploadInner() {
   async function onFile(f: File | null) {
     setError('');
     setPreview(null);
+    setImportSuccess(null);
     if (!f) return;
     try {
       setBusy('preview');
@@ -160,6 +161,8 @@ function UploadInner() {
     }
   }
 
+  const [importSuccess, setImportSuccess] = useState<{ count: number; customer: string } | null>(null);
+
   async function commit() {
     if (!preview) return;
     if (!selectedCustomer) {
@@ -177,7 +180,7 @@ function UploadInner() {
         customer_id: custId,
       }));
 
-      // ALWAYS update workspace state & persistent storage so Dashboard and Feedback List receive the data immediately
+      // Persist to Supabase and update state immediately
       await importRows(rowsToCommit);
 
       // Also attempt server sync if connected
@@ -185,9 +188,12 @@ function UploadInner() {
         await commitFn({ data: { rows: rowsToCommit, file_name: preview.file_name, digest: preview.digest } });
       } catch {}
 
+      const committedCount = rowsToCommit.length;
+      const committedCustomer = selectedCustomer;
       setPreview(null);
       setFileName('');
-      toast.success(`${rowsToCommit.length} feedback items imported and connected to Dashboard and Feedback list!`);
+      setImportSuccess({ count: committedCount, customer: committedCustomer });
+      toast.success(`${committedCount} feedback items saved to Supabase & live on Overview and Feedback list!`);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Import failed.');
     } finally {
@@ -208,6 +214,40 @@ function UploadInner() {
           </Button>
         </div>
       </div>
+      {importSuccess && (
+        <div
+          style={{
+            padding: '16px 20px',
+            borderRadius: 8,
+            background: 'rgba(16, 185, 129, 0.1)',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#10B981', fontWeight: 600 }}>
+              <CheckCircle2 size={18} />
+              <span>Import successful & saved to Supabase Cloud!</span>
+            </div>
+            <p style={{ margin: '4px 0 0 26px', fontSize: 14, color: 'var(--muted-foreground)' }}>
+              {importSuccess.count} feedback items for <strong>{importSuccess.customer}</strong> have been saved to the Supabase Cloud database and are live on the Overview and Feedback list.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <Link to="/feedback">
+              <Button size="sm">Go to Feedback List</Button>
+            </Link>
+            <Link to="/">
+              <Button variant="outline" size="sm">Go to Overview</Button>
+            </Link>
+          </div>
+        </div>
+      )}
       {!access && (
         <div style={{ padding: '12px 16px', borderRadius: 8, background: 'var(--secondary)', border: '1px solid var(--border)', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <span style={{ fontSize: 14 }}>

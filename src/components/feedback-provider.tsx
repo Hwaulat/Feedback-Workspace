@@ -492,6 +492,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       if (action === 'delete') {
         if (id) {
           setCustomers(prev => prev.filter(c => c.id !== id));
+          setItems(prev => prev.filter(i => i.customer_id !== id));
         }
         await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
         toast.success('Customer deleted successfully');
@@ -535,6 +536,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       }
       if (action === 'delete') {
         setCustomers(prev => prev.filter(c => c.id !== id));
+        setItems(prev => prev.filter(i => i.customer_id !== id));
         addHistoryEntry('Deleted customer', 'customer', null, 'Deleted', id, null);
         toast.success('Customer deleted successfully');
         return null;
@@ -550,93 +552,93 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       return { count: 0, pins: [] };
     }
 
-    try {
-      // 1. Send directly to server for persistent storage and multi-browser sync
-      const serverResult = await importFn({ data: { rows } });
-      await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
-      return serverResult;
-    } catch {
-      // Fallback local update
-      const custMap = new Map<string, Customer>();
-      customers.forEach(c => custMap.set(c.name.toLowerCase(), c));
-      const newPins: { name: string; pin: string }[] = [];
-      const addedCustomers: Customer[] = [];
+    // 1. Immediate optimistic update so Dashboard, Overview, and Feedback List update immediately
+    const custMap = new Map<string, Customer>();
+    customers.forEach(c => custMap.set(c.name.toLowerCase(), c));
+    const addedCustomers: Customer[] = [];
 
-      for (const r of rows) {
-        const key = r.customer_name.toLowerCase();
-        if (!custMap.has(key)) {
-          const newCust: Customer = {
-            id: crypto.randomUUID(),
-            name: r.customer_name,
-            active: true,
-            pin_version: 1,
-            created_at: new Date().toISOString(),
-          };
-          custMap.set(key, newCust);
-          addedCustomers.push(newCust);
-        }
-      }
-
-      if (addedCustomers.length > 0) {
-        setCustomers(prev => [...prev, ...addedCustomers]);
-      }
-
-      const importedItems: FeedbackItem[] = rows.map(r => {
-        const cust = custMap.get(r.customer_name.toLowerCase());
-        const custId = cust?.id ?? r.customer_id;
-        return {
-          customer_id: custId,
-          number: r.number,
-          feature: r.feature,
-          feedback: r.feedback,
-          detail: r.detail,
-          type: r.type,
-          category: r.category,
-          status: r.status,
-          activity: ((r.activity as string) === 'Pending' ? 'Not started' : r.activity) as any,
-          notes: r.notes,
-          report_date: r.report_date ?? todayWIB(),
-          estimated_date: r.estimated_date,
-          completion_date: r.activity === 'Done' ? todayWIB() : null,
-          deleted_at: null,
+    for (const r of rows) {
+      const key = r.customer_name.toLowerCase();
+      if (!custMap.has(key)) {
+        const newCust: Customer = {
           id: crypto.randomUUID(),
-          version: 1,
-          updated_at: new Date().toISOString(),
-          actor: access?.actor ?? 'Excel Import',
+          name: r.customer_name,
+          active: true,
+          pin_version: 1,
+          created_at: new Date().toISOString(),
         };
-      });
+        custMap.set(key, newCust);
+        addedCustomers.push(newCust);
+      }
+    }
 
-      setItems(prev => {
-        const next = [...prev];
-        for (const item of importedItems) {
-          const existingIdx = next.findIndex(
-            p => p.customer_id === item.customer_id && p.number === item.number && !p.deleted_at,
-          );
-          const existing = existingIdx >= 0 ? next[existingIdx] : undefined;
-          if (existing) {
-            next[existingIdx] = {
-              ...item,
-              id: existing.id,
-              version: (existing.version ?? 1) + 1,
-              report_date: item.report_date ?? existing.report_date ?? existing.updated_at.slice(0, 10),
-            };
-          } else {
-            next.unshift(item);
-          }
+    if (addedCustomers.length > 0) {
+      setCustomers(prev => [...prev, ...addedCustomers]);
+    }
+
+    const importedItems: FeedbackItem[] = rows.map(r => {
+      const cust = custMap.get(r.customer_name.toLowerCase());
+      const custId = cust?.id ?? r.customer_id;
+      return {
+        customer_id: custId,
+        number: r.number,
+        feature: r.feature || '',
+        feedback: r.feedback,
+        detail: r.detail || '',
+        type: r.type,
+        category: r.category,
+        status: r.status,
+        activity: ((r.activity as string) === 'Pending' ? 'Not started' : r.activity) as any,
+        notes: r.notes || '',
+        report_date: r.report_date ?? todayWIB(),
+        estimated_date: r.estimated_date || null,
+        completion_date: r.activity === 'Done' ? todayWIB() : null,
+        deleted_at: null,
+        id: crypto.randomUUID(),
+        version: 1,
+        updated_at: new Date().toISOString(),
+        actor: access?.actor ?? 'Excel Import',
+      };
+    });
+
+    setItems(prev => {
+      const next = [...prev];
+      for (const item of importedItems) {
+        const existingIdx = next.findIndex(
+          p => p.customer_id === item.customer_id && p.number === item.number && !p.deleted_at,
+        );
+        const existing = existingIdx >= 0 ? next[existingIdx] : undefined;
+        if (existing) {
+          next[existingIdx] = {
+            ...item,
+            id: existing.id,
+            version: (existing.version ?? 1) + 1,
+            report_date: item.report_date ?? existing.report_date ?? existing.updated_at.slice(0, 10),
+          };
+        } else {
+          next.unshift(item);
         }
-        return next;
-      });
+      }
+      return next;
+    });
 
-      addHistoryEntry(
-        'Imported Excel data',
-        'items',
-        null,
-        `${rows.length} rows processed`,
-        null,
-        null,
-      );
+    addHistoryEntry(
+      'Imported Excel data',
+      'items',
+      null,
+      `${rows.length} feedback items imported`,
+      null,
+      null,
+    );
 
-      return { count: rows.length, pins: newPins };
+    // 2. Persist directly to Supabase Cloud & server storage
+    try {
+      const serverResult = await importFn({ data: { rows } });
+      await queryClient.refetchQueries({ queryKey: ['feedback-workspace'] });
+      return serverResult;
+    } catch (err) {
+      console.warn('[importRows server sync fallback]:', err);
+      return { count: rows.length, pins: [] };
     }
   }
 

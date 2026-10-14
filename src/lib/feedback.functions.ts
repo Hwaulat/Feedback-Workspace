@@ -70,15 +70,12 @@ export const signIn = createServerFn({ method: 'POST' })
       }
     } else if (PIN_PATTERN.test(data.passcode)) {
       const hash = pinHash(data.passcode);
+      let cust: any = null;
 
-      // 1. Check server-store customers
-      const store = await readServerStore();
-      let cust = store.customers.find(c => c.pin === data.passcode || c.pin_hash === hash);
-
-      // 2. Check Supabase customers
-      if (!cust) {
-        try {
-          const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
+      // 1. Primary: Check Supabase Cloud customers
+      try {
+        const { supabaseAdmin: db, hasSupabaseAdmin } = await import('@/integrations/supabase/client.server');
+        if (hasSupabaseAdmin()) {
           const { data: sbCust } = await db
             .from('feedback_customers')
             .select('*')
@@ -86,14 +83,18 @@ export const signIn = createServerFn({ method: 'POST' })
             .eq('active', true)
             .maybeSingle();
           if (sbCust) {
-            cust = sbCust as any;
-            // Cache to server store
-            await syncClientDataToServer({
-              customers: [sbCust as any],
-              items: [],
-              history: [],
-            });
+            cust = sbCust;
           }
+        }
+      } catch (err) {
+        console.warn('[Supabase signIn customer]:', err);
+      }
+
+      // 2. Fallback: Check server-store customers
+      if (!cust) {
+        try {
+          const store = await readServerStore();
+          cust = store.customers.find(c => c.pin === data.passcode || c.pin_hash === hash);
         } catch {}
       }
 
@@ -389,13 +390,13 @@ export const manageCustomer = createServerFn({ method: 'POST' })
     let pin: string | null = null;
     let customer: Customer | null = null;
 
-    // 1. Try Supabase
+    // 1. Primary: Direct Supabase Cloud
     try {
       const { supabaseAdmin: db, hasSupabaseAdmin } = await import('@/integrations/supabase/client.server');
       if (hasSupabaseAdmin()) {
         if (data.action === 'create') {
           pin = String(randomInt(100000, 999999));
-          const { data: newCust } = await db
+          const { data: newCust, error: cErr } = await db
             .from('feedback_customers')
             .insert({
               name: data.name.trim(),
@@ -407,7 +408,20 @@ export const manageCustomer = createServerFn({ method: 'POST' })
             .select()
             .single();
 
-          if (newCust) {
+          if (cErr) {
+            console.error('[Supabase create customer error]:', cErr);
+            if (cErr.code === '23505') {
+              const { data: existing } = await db
+                .from('feedback_customers')
+                .select('*')
+                .ilike('name', data.name.trim())
+                .maybeSingle();
+              if (existing) {
+                customer = existing as any;
+                pin = existing.pin || pin;
+              }
+            }
+          } else if (newCust) {
             customer = {
               id: newCust.id,
               name: newCust.name,
@@ -430,14 +444,18 @@ export const manageCustomer = createServerFn({ method: 'POST' })
           pin = String(randomInt(100000, 999999));
           const { data: current } = await db.from('feedback_customers').select('pin_version').eq('id', data.id).single();
           const nextVersion = (current?.pin_version ?? 1) + 1;
-          await db
+          const { data: updated } = await db
             .from('feedback_customers')
             .update({
               pin,
               pin_hash: pinHash(pin),
               pin_version: nextVersion,
             })
-            .eq('id', data.id);
+            .eq('id', data.id)
+            .select()
+            .single();
+
+          if (updated) customer = updated as any;
 
           await db.from('feedback_history').insert({
             customer_id: data.id,
@@ -449,7 +467,14 @@ export const manageCustomer = createServerFn({ method: 'POST' })
         } else if (data.action === 'toggle' && data.id) {
           const { data: current } = await db.from('feedback_customers').select('active').eq('id', data.id).single();
           if (current) {
-            await db.from('feedback_customers').update({ active: !current.active }).eq('id', data.id);
+            const { data: toggled } = await db
+              .from('feedback_customers')
+              .update({ active: !current.active })
+              .eq('id', data.id)
+              .select()
+              .single();
+            if (toggled) customer = toggled as any;
+
             await db.from('feedback_history').insert({
               customer_id: data.id,
               action: !current.active ? 'Activated customer' : 'Deactivated customer',
@@ -469,7 +494,7 @@ export const manageCustomer = createServerFn({ method: 'POST' })
         }
       }
     } catch (err) {
-      console.warn('[Supabase manageCustomer fallback]:', err);
+      console.warn('[Supabase manageCustomer error]:', err);
     }
 
     // 2. Try server-store

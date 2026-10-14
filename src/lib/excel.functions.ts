@@ -162,7 +162,7 @@ export async function generateFeedbackWorkbook(
 }
 
 export const exportFeedback = createServerFn({ method: 'POST' })
-  .inputValidator(
+  .validator(
     v =>
       z
         .object({
@@ -442,7 +442,7 @@ export async function parseExcelBuffer(
 }
 
 export const previewImport = createServerFn({ method: 'POST' })
-  .inputValidator(v => fileSchema.parse(v))
+  .validator(v => fileSchema.parse(v))
   .handler(async ({ data }): Promise<ImportPreview> => {
     const buffer = Buffer.from(data.base64, 'base64');
     return parseExcelBuffer(buffer, data.name, data.customer_name);
@@ -455,7 +455,7 @@ const importRowSchema = itemSchema.extend({
 });
 
 export const commitImport = createServerFn({ method: 'POST' })
-  .inputValidator(
+  .validator(
     v =>
       z
         .object({
@@ -466,33 +466,8 @@ export const commitImport = createServerFn({ method: 'POST' })
         .parse(v)
   )
   .handler(async ({ data }) => {
-    const names = [...new Set(data.rows.map(r => r.customer_name))];
-    const newCustomers: { name: string; hash: string }[] = [];
-
-    try {
-      const { requireAccess, freshPin } = await import('./feedback-session.server');
-      const access = await requireAccess(true);
-      const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
-      const { data: customers } = await db.from('feedback_customers').select('name').in('name', names);
-      for (const name of names) {
-        if (!customers?.some(c => c.name === name)) {
-          const p = await freshPin();
-          newCustomers.push({ name, hash: p.hash });
-        }
-      }
-      const { error: importError } = await (db.rpc as any)('feedback_commit_import', {
-        batch_digest: data.digest,
-        batch_name: data.file_name,
-        batch_actor: access.actor,
-        batch_rows: data.rows,
-        new_customers: newCustomers,
-      });
-      if (!importError) {
-        return { count: data.rows.length, pins: [] };
-      }
-    } catch {}
-
-    return { count: data.rows.length, pins: [] };
+    const { importFeedback } = await import('./feedback.functions');
+    return await importFeedback({ data: { rows: data.rows as any } });
   });
 
 export { safeCell };

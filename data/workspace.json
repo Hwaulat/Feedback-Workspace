@@ -17,6 +17,33 @@
       "pin_version": 1,
       "created_at": "2026-10-13T13:49:08.111Z",
       "pin_hash": "4673d52762dfe88e299771ca1aff669e84ae8593a54cfbb3b7e006583b951487"
+    },
+    {
+      "id": "05903f27-3703-46ab-bd3f-05d38ed132bf",
+      "name": "Acme Corp",
+      "active": true,
+      "pin": "502527",
+      "pin_hash": "42276d7cd32840cb801d6f9bc21d42c848f4fb47e9c7a03c8052218e6b5229d5",
+      "pin_version": 1,
+      "created_at": "2026-10-14T09:08:21.947Z"
+    },
+    {
+      "id": "0a1cb105-cf65-4a1f-be04-f07daa7896b9",
+      "name": "Beta Customer",
+      "active": true,
+      "pin": "986574",
+      "pin_hash": "80c81e63065fa089d1d8872be0bedfd9fae71d21b3b31ea89e87890fda878956",
+      "pin_version": 1,
+      "created_at": "2026-10-14T09:12:31.132Z"
+    },
+    {
+      "id": "e90b7a3c-a4c5-4e08-b1eb-bbc3ada00c92",
+      "name": "Delta Corp",
+      "active": true,
+      "pin": "168960",
+      "pin_hash": "5562c71c3a46614e8c96a1088dd1fb5173bbe32805b041b8da2d93284ba0a616",
+      "pin_version": 1,
+      "created_at": "2026-10-14T09:22:28.684Z"
     }
   ],
   "items": [
@@ -1366,6 +1393,39 @@
     }
   ],
   "history": [
+    {
+      "id": "8fe4a90a-2288-4bc6-a9ab-28fd65179bc6",
+      "customer_id": "e90b7a3c-a4c5-4e08-b1eb-bbc3ada00c92",
+      "item_id": null,
+      "action": "Created customer",
+      "field": "name",
+      "old_value": null,
+      "new_value": "Delta Corp",
+      "actor": "Admin",
+      "created_at": "2026-10-14T09:22:28.684Z"
+    },
+    {
+      "id": "29928ec8-5403-400a-a16e-cb1aed5c5cde",
+      "customer_id": "0a1cb105-cf65-4a1f-be04-f07daa7896b9",
+      "item_id": null,
+      "action": "Created customer",
+      "field": "name",
+      "old_value": null,
+      "new_value": "Beta Customer",
+      "actor": "Admin",
+      "created_at": "2026-10-14T09:12:31.132Z"
+    },
+    {
+      "id": "6ed4a7d7-7475-4005-9560-86153d3cbca3",
+      "customer_id": "05903f27-3703-46ab-bd3f-05d38ed132bf",
+      "item_id": null,
+      "action": "Created customer",
+      "field": "name",
+      "old_value": null,
+      "new_value": "Acme Corp",
+      "actor": "Admin",
+      "created_at": "2026-10-14T09:08:21.947Z"
+    },
     {
       "id": "9c260c2d-8b45-4df4-bd5a-14447f350a6f",
       "customer_id": "6de58588-dbd1-404c-82b8-8cbca6fdfad6",

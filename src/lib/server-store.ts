@@ -212,7 +212,7 @@ export async function manageServerCustomer(
   name: string,
   id?: string,
   actor = 'Loop Team',
-): Promise<{ pin?: string | null }> {
+): Promise<{ pin?: string | null; customer?: Customer | null }> {
   const store = await readServerStore();
   const cleanName = name.trim();
   const nowIso = new Date().toISOString();
@@ -241,7 +241,7 @@ export async function manageServerCustomer(
       created_at: nowIso,
     });
     await writeServerStore(store);
-    return { pin };
+    return { pin, customer: newCust };
   }
 
   if (!id) throw new Error('Customer ID is required.');

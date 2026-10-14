@@ -348,10 +348,13 @@ button, a, input, select, textarea { outline-offset: 4px; }
 .pin-input { letter-spacing:12px;font-size:26px !important;text-align:center;height:61px; }
 .pin-reveal { display:flex;align-items:center;justify-content:space-between;gap:10px; }
 .login-copy { font-size:14px;color:var(--muted-foreground);line-height:1.7;margin:0 0 20px; }
-.upload-zone { border:1px dashed var(--border);border-radius:7px;min-height:235px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;margin-top:25px;background:var(--surface-subtle); }
-.upload-icon { width:46px;height:46px;display:grid;place-items:center;border:1px solid var(--border);border-radius:7px;background:var(--background); }
-.upload-zone h2 { font-size:18px;font-weight:500;margin:0; }
-.upload-zone p { font-size:14px;color:var(--muted-foreground);margin:0; }
+.upload-zone { border:1px dashed var(--border);border-radius:7px;min-height:235px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;margin-top:25px;background:var(--surface-subtle);transition:all 0.2s cubic-bezier(0.4,0,0.2,1); }
+.upload-zone:hover { border-color:var(--foreground); }
+.upload-zone.is-dragging { border-color:var(--primary,#02A9EA) !important;border-style:dashed !important;border-width:2px !important;background:rgba(2,169,234,0.08) !important;box-shadow:0 0 32px rgba(2,169,234,0.18) !important;transform:scale(1.01); }
+.upload-icon { width:46px;height:46px;display:grid;place-items:center;border:1px solid var(--border);border-radius:7px;background:var(--background);transition:transform 0.2s cubic-bezier(0.4,0,0.2,1),border-color 0.2s,color 0.2s; }
+.upload-zone.is-dragging .upload-icon { transform:scale(1.2) translateY(-4px);border-color:var(--primary,#02A9EA);color:var(--primary,#02A9EA); }
+.upload-zone h2 { font-size:18px;font-weight:500;margin:0;transition:color 0.2s; }
+.upload-zone p { font-size:14px;color:var(--muted-foreground);margin:0;transition:color 0.2s; }
 .upload-info { display:flex;justify-content:space-between;margin-top:15px;font-size:13px;color:var(--muted-foreground); }
 .customer-grid { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px; }
 .customer-card { border:1px solid var(--border);border-radius:7px;padding:22px; }
@@ -367,7 +370,8 @@ button, a, input, select, textarea { outline-offset: 4px; }
 .history-row p { font-size:13px;line-height:1.6;color:var(--muted-foreground);margin:0; }
 .history-row time { margin-left:auto;font-size:12px;white-space:nowrap;color:var(--muted-foreground); }
 .empty-state { padding:65px 20px;text-align:center;color:var(--muted-foreground);font-size:15px; }
-.empty-state svg { margin:0 auto 15px;width:30px;height:30px; }
+.empty-state > svg, .empty-state svg.empty-icon { margin:0 auto 15px;width:30px;height:30px;display:block; }
+.empty-state button svg, .empty-state .btn svg { margin:0 !important;width:14px !important;height:14px !important;display:inline-block !important; }
 .sidebar.collapsed { width:72px;padding-left:10px;padding-right:10px; }
 .sidebar.collapsed .brand-name,.sidebar.collapsed .workspace-switch,.sidebar.collapsed .sidebar-label,.sidebar.collapsed .nav-text,.sidebar.collapsed .nav-count,.sidebar.collapsed .sidebar-note,.sidebar.collapsed .profile-copy { display:none; }
 .sidebar.collapsed .brand { padding:0 13px;margin-bottom:42px; }

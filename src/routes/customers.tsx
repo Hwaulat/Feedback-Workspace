@@ -33,15 +33,21 @@ function CustomersInner() {
     <>
       <div className="page-heading">
         <div><h1>Customers & PINs</h1><p>Every customer signs in with their own six-digit PIN and sees only their feedback.</p></div>
-        <div className="heading-actions"><Button size="sm" onClick={() => setCreating(true)}><Plus />New customer</Button></div>
+        <div className="heading-actions">
+          <Button size="sm" onClick={() => setCreating(true)} className="inline-flex items-center gap-1.5 font-medium">
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>New customer</span>
+          </Button>
+        </div>
       </div>
       {error && <p className="error-text" role="alert">{error}</p>}
       {customers.length === 0 ? (
         <div className="empty-state">
           <p className="font-medium text-base mb-1">No registered customers yet.</p>
           <p className="text-muted-foreground text-sm mb-4">Add customers manually. The system will automatically generate a 6-digit access PIN for each customer.</p>
-          <Button size="sm" onClick={() => setCreating(true)}>
-            <Plus /> Add new customer
+          <Button onClick={() => setCreating(true)} className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-medium rounded-lg shadow-sm">
+            <Plus className="w-4 h-4 shrink-0" />
+            <span>Add new customer</span>
           </Button>
         </div>
       ) : (

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { useServerFn } from '@tanstack/react-start';
 import { FileUp, Download, CheckCircle2 } from 'lucide-react';
@@ -30,6 +30,59 @@ function UploadInner() {
   const [selectedCustomer, setSelectedCustomer] = useState<string>('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'idle' | 'preview' | 'commit'>('idle');
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  function handleDragEnter(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current += 1;
+    if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+      setIsDragging(true);
+    }
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current -= 1;
+    if (dragCounterRef.current <= 0) {
+      setIsDragging(false);
+      dragCounterRef.current = 0;
+    }
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    dragCounterRef.current = 0;
+
+    const file = e.dataTransfer.files?.[0] ?? null;
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.xlsx')) {
+      setError('Please upload a valid Excel workbook (.xlsx).');
+      toast.error('Invalid file type: Please upload a .xlsx workbook.');
+      return;
+    }
+
+    if (file.size > MAX_IMPORT_BYTES) {
+      const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+      setError(`File size exceeds the 10 MB limit (${sizeMb} MB).`);
+      toast.error('File too large (maximum 10 MB).');
+      return;
+    }
+
+    setFileName(file.name);
+    onFile(file);
+  }
 
   useEffect(() => {
     if (!selectedCustomer && customers.length > 0 && customers[0]?.name) {
@@ -166,12 +219,26 @@ function UploadInner() {
       <p className="filter-caption">
         Import up to {MAX_IMPORT_ROWS.toLocaleString()} rows and 10 MB per file · Automatically detects sheet Feedback or first sheet · Data connects directly to Dashboard & Feedback list.
       </p>
-      <label className="upload-zone" style={{ cursor: 'pointer' }}>
-        <span className="upload-icon"><FileUp /></span>
-        {fileName ? (
+      <label
+        className={`upload-zone ${isDragging ? 'is-dragging' : ''}`}
+        style={{ cursor: 'pointer', position: 'relative' }}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        <span className="upload-icon">
+          <FileUp />
+        </span>
+        {isDragging ? (
+          <>
+            <h2 style={{ color: 'var(--primary, #02A9EA)' }}>Release to upload Excel file</h2>
+            <p style={{ color: 'var(--primary, #02A9EA)' }}>Drop your .xlsx workbook here to start preview</p>
+          </>
+        ) : fileName ? (
           <>
             <h2>{fileName}</h2>
-            <p>Click to choose another file.</p>
+            <p>Click or drag another file to replace (.xlsx)</p>
           </>
         ) : (
           <>
@@ -181,12 +248,14 @@ function UploadInner() {
         )}
         <input
           type="file"
-          accept=".xlsx"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
           style={{ display: 'none' }}
           onChange={e => {
             const f = e.target.files?.[0] ?? null;
-            setFileName(f ? f.name : '');
-            onFile(f);
+            if (f) {
+              setFileName(f.name);
+              onFile(f);
+            }
           }}
         />
       </label>

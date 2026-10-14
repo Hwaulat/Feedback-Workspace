@@ -8,9 +8,39 @@
       "pin_version": 1,
       "created_at": "2026-10-13T13:16:33.428Z",
       "pin_hash": "2557da1600bacd66a5dc0469e075c7ce0db893007a44cbbd7f13ce1488327708"
+    },
+    {
+      "id": "3afc375d-d0dc-4138-835e-7734634b38de",
+      "name": "Acme Corp",
+      "active": true,
+      "pin": "164565",
+      "pin_version": 1,
+      "created_at": "2026-10-13T13:49:08.111Z",
+      "pin_hash": "4673d52762dfe88e299771ca1aff669e84ae8593a54cfbb3b7e006583b951487"
     }
   ],
   "items": [
+    {
+      "customer_id": "3afc375d-d0dc-4138-835e-7734634b38de",
+      "number": 1,
+      "feature": "Auth",
+      "feedback": "Sample Login Feedback",
+      "detail": "",
+      "type": "Bug Report",
+      "category": "Major",
+      "status": "Waiting",
+      "activity": "Not started",
+      "notes": "",
+      "estimated_date": null,
+      "id": "b0c769d0-fe7d-4adc-825f-856215f0959a",
+      "version": 1,
+      "completion_date": null,
+      "deleted_at": null,
+      "updated_at": "2026-10-13T13:49:14.117Z",
+      "actor": "Admin Waula",
+      "needs_review": false,
+      "image": null
+    },
     {
       "customer_id": "6de58588-dbd1-404c-82b8-8cbca6fdfad6",
       "number": 1,

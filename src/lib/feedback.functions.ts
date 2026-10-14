@@ -198,9 +198,7 @@ export const getWorkspace = createServerFn({ method: 'GET' }).handler(
             const customers: Customer[] = (cq.data ?? []) as any[];
             const history: HistoryEntry[] = (hq.data ?? []) as any[];
 
-            if (customers.length > 0 || mappedItems.length > 0) {
-              return { customers, items: mappedItems, history };
-            }
+            return { customers, items: mappedItems, history };
           }
         }
       } catch (sbErr) {
@@ -389,6 +387,7 @@ export const manageCustomer = createServerFn({ method: 'POST' })
     const access = await requireAccess(true);
 
     let pin: string | null = null;
+    let customer: Customer | null = null;
 
     // 1. Try Supabase
     try {
@@ -409,6 +408,16 @@ export const manageCustomer = createServerFn({ method: 'POST' })
             .single();
 
           if (newCust) {
+            customer = {
+              id: newCust.id,
+              name: newCust.name,
+              pin: newCust.pin || pin,
+              pin_version: newCust.pin_version ?? 1,
+              active: newCust.active ?? true,
+              created_at: newCust.created_at,
+            };
+            pin = customer.pin ?? pin;
+
             await db.from('feedback_history').insert({
               customer_id: newCust.id,
               action: 'Created customer',
@@ -467,9 +476,10 @@ export const manageCustomer = createServerFn({ method: 'POST' })
     try {
       const localResult = await manageServerCustomer(data.action, data.name, data.id, access.actor);
       if (!pin) pin = localResult.pin ?? null;
+      if (!customer && localResult.customer) customer = localResult.customer;
     } catch {}
 
-    return { pin };
+    return { pin, customer };
   });
 
 export const importFeedback = createServerFn({ method: 'POST' })

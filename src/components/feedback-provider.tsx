@@ -446,22 +446,54 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
 
     try {
       const res = await customerFn({ data: { action, name: cleanName, id } });
-      await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
 
       if (action === 'create') {
         const pin = res.pin || String(Math.floor(100000 + Math.random() * 900000));
+        const newCust: Customer = (res as any).customer ?? {
+          id: crypto.randomUUID(),
+          name: cleanName,
+          active: true,
+          pin,
+          pin_version: 1,
+          created_at: new Date().toISOString(),
+        };
+        setCustomers(prev => {
+          if (prev.some(c => c.id === newCust.id || c.name.toLowerCase() === newCust.name.toLowerCase())) {
+            return prev.map(c => (c.name.toLowerCase() === newCust.name.toLowerCase() ? newCust : c));
+          }
+          return [...prev, newCust];
+        });
+        addHistoryEntry('Created customer', 'name', null, cleanName, newCust.id, null);
+        await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
         toast.success(`Customer "${cleanName}" created with 6-digit PIN`);
         return pin;
       }
       if (action === 'regenerate') {
+        const newPin = res.pin ?? String(Math.floor(100000 + Math.random() * 900000));
+        if (id) {
+          setCustomers(prev =>
+            prev.map(c => (c.id === id ? { ...c, pin: newPin, pin_version: c.pin_version + 1 } : c)),
+          );
+        }
+        await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
         toast.success('New PIN generated successfully');
-        return res.pin ?? null;
+        return newPin;
       }
       if (action === 'toggle') {
+        if (id) {
+          const target = customers.find(c => c.id === id);
+          const nextActive = target ? !target.active : false;
+          setCustomers(prev => prev.map(c => (c.id === id ? { ...c, active: nextActive } : c)));
+        }
+        await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
         toast.success('Customer status updated');
         return null;
       }
       if (action === 'delete') {
+        if (id) {
+          setCustomers(prev => prev.filter(c => c.id !== id));
+        }
+        await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
         toast.success('Customer deleted successfully');
         return null;
       }

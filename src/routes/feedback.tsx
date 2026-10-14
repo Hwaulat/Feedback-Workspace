@@ -28,12 +28,12 @@ function FeedbackPage() {
   const rows = useMemo(() => items
     .filter(i => (viewTrash ? Boolean(i.deleted_at) : !i.deleted_at)
       && (selectedCustomer === 'all' || i.customer_id === selectedCustomer)
-      && (type === 'all' || (isCustomer && i.needs_review ? false : i.type === type))
-      && (status === 'all' || i.status === status)
-      && (activity === 'all' || (isCustomer && i.needs_review ? false : i.activity === activity || (activity === 'Not started' && (i.activity as string) === 'Pending')))
+      && (type === 'all' || (i.needs_review ? false : i.type === type))
+      && (status === 'all' || (i.needs_review ? false : i.status === status))
+      && (activity === 'all' || (i.needs_review ? false : i.activity === activity || (activity === 'Not started' && (i.activity as string) === 'Pending')))
       && (reviewFilter === 'all' || (reviewFilter === 'needs_update' ? Boolean(i.needs_review) : !i.needs_review))
       && (search === '' || `${i.feature} ${i.feedback} ${i.notes} ${i.detail}`.toLowerCase().includes(search.toLowerCase())))
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search, isCustomer]);
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search]);
 
   const open = (item: FeedbackItem) => (canManage ? setEditing(item) : setDetail(item));
   const needsUpdateCount = items.filter(i => !i.deleted_at && i.needs_review).length;
@@ -226,17 +226,23 @@ function FeedbackPage() {
                         )}
                       </td>
                     )}
-                    <td>{isCustomer && item.needs_review ? <span className="text-muted-foreground">—</span> : item.type}</td>
+                    <td>{item.needs_review ? <span className="text-muted-foreground">—</span> : item.type}</td>
                     <td>
-                      {isCustomer && item.needs_review ? (
+                      {item.needs_review ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
                         <span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span>
                       )}
                     </td>
-                    <td><span className={`badge ${statusBadge(item.status)}`}>{item.status}</span></td>
                     <td>
-                      {isCustomer && item.needs_review ? (
+                      {item.needs_review ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span className={`badge ${statusBadge(item.status)}`}>{item.status}</span>
+                      )}
+                    </td>
+                    <td>
+                      {item.needs_review ? (
                         <span className="text-muted-foreground">—</span>
                       ) : (
                         <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
@@ -315,11 +321,11 @@ function FeedbackPage() {
                     {item.needs_review ? 'Needs Update' : 'Updated'}
                   </span>
                 )}
-                <span className={`badge ${statusBadge(item.status)}`}>{item.status}</span>
-                {isCustomer && item.needs_review ? (
-                  <span className="text-xs text-muted-foreground italic">Type, Category & Activity pending review</span>
+                {item.needs_review ? (
+                  <span className="text-xs text-muted-foreground italic">Type, Category, Status & Activity: — (Needs Update)</span>
                 ) : (
                   <>
+                    <span className={`badge ${statusBadge(item.status)}`}>{item.status}</span>
                     <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
                     <span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span>
                   </>

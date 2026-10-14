@@ -1399,23 +1399,34 @@
       "feedback": "Invalid Path",
       "detail": "",
       "type": "Bug Report",
-      "category": "Minor",
-      "status": "Waiting",
-      "activity": "Not started",
+      "category": "Major",
+      "status": "Execution",
+      "activity": "In progress",
       "notes": "",
+      "estimated_date": "2026-10-14",
       "report_date": "2026-10-14",
-      "estimated_date": null,
+      "needs_review": false,
+      "image": null,
       "id": "16c75e78-11b9-490d-875f-542a209b30d7",
-      "version": 3,
+      "version": 12,
       "completion_date": null,
       "deleted_at": null,
-      "updated_at": "2026-10-14T10:07:38.387Z",
-      "actor": "Hasan",
-      "needs_review": true,
-      "image": null
+      "updated_at": "2026-10-14T11:00:18.292Z",
+      "actor": "Admin"
     }
   ],
   "history": [
+    {
+      "id": "944d9460-d010-43c1-ab5d-84d2143b2a6b",
+      "customer_id": "6de58588-dbd1-404c-82b8-8cbca6fdfad6",
+      "item_id": "16c75e78-11b9-490d-875f-542a209b30d7",
+      "action": "Updated feedback",
+      "field": "activity",
+      "old_value": "Not started",
+      "new_value": "In progress",
+      "actor": "Admin",
+      "created_at": "2026-10-14T11:00:18.292Z"
+    },
     {
       "id": "8fe4a90a-2288-4bc6-a9ab-28fd65179bc6",
       "customer_id": "e90b7a3c-a4c5-4e08-b1eb-bbc3ada00c92",

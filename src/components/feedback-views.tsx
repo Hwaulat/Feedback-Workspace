@@ -302,8 +302,7 @@ export function DetailModal({
   const [zoomImage, setZoomImage] = useState(false);
   const customer = customers.find(c => c.id === item.customer_id);
   const showReview = access?.role !== 'customer';
-  const isCustomer = access?.role === 'customer';
-  const isPendingInternalReview = isCustomer && Boolean(item.needs_review);
+  const isPendingInternalReview = Boolean(item.needs_review);
   return (
     <div
       className={drawer ? 'modal-overlay-drawer' : 'modal-overlay'}
@@ -343,7 +342,16 @@ export function DetailModal({
               )}
             </dd>
           </div>
-          <div><dt>Status</dt><dd><span className={`badge ${statusBadge(item.status)}`}>{item.status}</span></dd></div>
+          <div>
+            <dt>Status</dt>
+            <dd>
+              {isPendingInternalReview ? (
+                <span className="text-muted-foreground">—</span>
+              ) : (
+                <span className={`badge ${statusBadge(item.status)}`}>{item.status}</span>
+              )}
+            </dd>
+          </div>
           <div>
             <dt>Activity</dt>
             <dd>
@@ -358,7 +366,7 @@ export function DetailModal({
           <div><dt>Completion date (automatic)</dt><dd>{fmtDate(item.completion_date)}</dd></div>
           {isPendingInternalReview && (
             <div className="full" style={{ padding: '6px 12px', background: 'var(--secondary)', borderRadius: 6, fontSize: 13, color: 'var(--muted-foreground)' }}>
-              ℹ️ <em>Type, Category, and Activity status are currently pending review and will be assigned by the internal team.</em>
+              ℹ️ <em>Type, Category, Status, and Activity are currently pending review and must be updated by the internal team.</em>
             </div>
           )}
           <div className="full"><dt>Feedback</dt><dd>{item.feedback}</dd></div>
@@ -487,10 +495,10 @@ export function FormModal({
         feature: item.feature,
         feedback: item.feedback,
         detail: item.detail,
-        type: item.type,
-        category: item.category,
-        status: item.status,
-        activity: item.activity,
+        type: !isCustomer && item.needs_review ? ('' as any) : item.type,
+        category: !isCustomer && item.needs_review ? ('' as any) : item.category,
+        status: !isCustomer && item.needs_review ? ('' as any) : item.status,
+        activity: !isCustomer && item.needs_review ? ('' as any) : item.activity,
         notes: item.notes,
         report_date: item.report_date ?? item.updated_at.slice(0, 10),
         estimated_date: item.estimated_date,
@@ -503,10 +511,10 @@ export function FormModal({
         feature: '',
         feedback: '',
         detail: '',
-        type: 'Bug Report',
-        category: 'Minor',
-        status: 'Waiting',
-        activity: 'Not started',
+        type: isCustomer ? 'Bug Report' : ('' as any),
+        category: isCustomer ? 'Minor' : ('' as any),
+        status: isCustomer ? 'Waiting' : ('' as any),
+        activity: isCustomer ? 'Not started' : ('' as any),
         notes: '',
         report_date: todayWIB(),
         estimated_date: null,
@@ -523,6 +531,12 @@ export function FormModal({
     setBusy(true);
     setError('');
     try {
+      if (!isCustomer) {
+        if (!form.type || !form.category || !form.status || !form.activity) {
+          throw new Error('Please select all 4 required fields: Type, Category, Status, and Activity status.');
+        }
+      }
+
       let finalCustId = isCustomer ? (access?.customer_id || defaultCustId) : (form.customer_id || defaultCustId);
       if (!finalCustId && customers.length === 0) {
         if (!newCustName.trim()) throw new Error('Please enter a customer name first.');
@@ -547,10 +561,10 @@ export function FormModal({
         feedback: form.feedback.trim(),
         detail: form.detail.trim(),
         image: form.image || null,
-        type: item ? form.type : (isCustomer ? 'Bug Report' : form.type),
-        category: item ? form.category : (isCustomer ? 'Minor' : form.category),
-        status: item ? form.status : (isCustomer ? 'Waiting' : form.status),
-        activity: item ? form.activity : (isCustomer ? 'Not started' : form.activity),
+        type: isCustomer ? (item ? form.type : 'Bug Report') : form.type,
+        category: isCustomer ? (item ? form.category : 'Minor') : form.category,
+        status: isCustomer ? (item ? form.status : 'Waiting') : form.status,
+        activity: isCustomer ? (item ? form.activity : 'Not started') : form.activity,
         estimated_date: isCustomer ? (item ? item.estimated_date : null) : (form.estimated_date || null),
         needs_review: isCustomer ? true : (form.needs_review ?? false),
       }, item);
@@ -595,7 +609,7 @@ export function FormModal({
                   gap: 8,
                 }}
               >
-                <span><strong>Action required:</strong> Added by customer. Please update Type, Category, Status, Activity, and Estimated Date. Saving this feedback will complete triage and publish Type, Category & Activity to the customer.</span>
+                <span><strong>Action required (Needs Update):</strong> Please select all 4 required fields: <strong>Type</strong>, <strong>Category</strong>, <strong>Status</strong>, and <strong>Activity</strong>. Once selected and saved, review status will automatically change to <strong>Updated</strong>.</span>
               </div>
             )}
 
@@ -713,10 +727,34 @@ export function FormModal({
                     disabled={busy}
                   />
                 </div>
-                <label className="form-field">Type<select value={form.type} onChange={set('type')}>{types.map(t => <option key={t}>{t}</option>)}</select></label>
-                <label className="form-field">Category<select value={form.category} onChange={set('category')}>{categories.map(c => <option key={c}>{c}</option>)}</select></label>
-                <label className="form-field">Status<select value={form.status} onChange={set('status')}>{statuses.map(s => <option key={s}>{s}</option>)}</select></label>
-                <label className="form-field">Activity status<select value={form.activity} onChange={set('activity')}>{activities.map(a => <option key={a}>{a}</option>)}</select></label>
+                <label className="form-field">
+                  Type *
+                  <select required value={form.type} onChange={set('type')}>
+                    <option value="" disabled>-- Select Type --</option>
+                    {types.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </label>
+                <label className="form-field">
+                  Category *
+                  <select required value={form.category} onChange={set('category')}>
+                    <option value="" disabled>-- Select Category --</option>
+                    {categories.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </label>
+                <label className="form-field">
+                  Status *
+                  <select required value={form.status} onChange={set('status')}>
+                    <option value="" disabled>-- Select Status --</option>
+                    {statuses.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </label>
+                <label className="form-field">
+                  Activity status *
+                  <select required value={form.activity} onChange={set('activity')}>
+                    <option value="" disabled>-- Select Activity --</option>
+                    {activities.map(a => <option key={a} value={a}>{a}</option>)}
+                  </select>
+                </label>
                 <label className="form-field">Estimated completion date<input type="date" value={form.estimated_date ?? ''} onChange={e => setForm(f => ({ ...f, estimated_date: e.target.value || null }))} /></label>
                 <label className="form-field">Completion date<input value={form.activity === 'Done' ? (item?.completion_date ?? todayWIB()) : '—'} readOnly title="Set automatically when activity becomes Done" /></label>
                 <label className="form-field full">Notes from Ragdalion<textarea maxLength={5000} value={form.notes} onChange={set('notes')} placeholder="Notes from Ragdalion" /></label>
@@ -728,7 +766,7 @@ export function FormModal({
                     style={{ width: 'auto', margin: 0 }}
                   />
                   <span style={{ fontSize: 14 }}>
-                    <strong>Keep as "Needs Update"</strong> (Check only if this item still requires further triage; leave unchecked to publish Type, Category & Activity to customer)
+                    <strong>Keep as "Needs Update"</strong> (Check only if this item still requires further triage; leave unchecked so status changes to Updated)
                   </span>
                 </label>
               </>
@@ -761,7 +799,9 @@ export function FormModal({
               </Button>
             )}
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit" disabled={busy}>{busy ? 'Saving…' : isCustomer ? (item ? 'Save feedback' : 'Submit feedback') : 'Save feedback'}</Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? 'Saving…' : isCustomer ? (item ? 'Save feedback' : 'Submit feedback') : item?.needs_review ? 'Update feedback (Mark as Updated)' : 'Save feedback'}
+            </Button>
           </div>
         </form>
       </div>

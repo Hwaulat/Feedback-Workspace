@@ -547,9 +547,9 @@ describe('Feature 12: Status Column Badges (Waiting=Orange, Execution=Green, Exe
   });
 });
 
-describe('Feature 13: Customer Portal Feedback Submission Triage View', () => {
-  it('identifies unreviewed customer feedback where Type, Category, and Activity remain empty until internal review', () => {
-    const unreviewedCustomerItem: FeedbackItem = {
+describe('Feature 13: Review Status Needs Update & 4-Field Triage', () => {
+  it('displays dash "-" for Type, Category, Status, and Activity when review status is Needs Update', () => {
+    const unreviewedItem: FeedbackItem = {
       id: 'cust-item-63',
       customer_id: 'cust-1',
       number: 63,
@@ -571,30 +571,34 @@ describe('Feature 13: Customer Portal Feedback Submission Triage View', () => {
       needs_review: true,
     };
 
-    const isCustomer = true;
-    const isPending = isCustomer && Boolean(unreviewedCustomerItem.needs_review);
+    const isPending = Boolean(unreviewedItem.needs_review);
 
-    // In customer portal, unreviewed items display empty / dash
-    const displayType = isPending ? '—' : unreviewedCustomerItem.type;
-    const displayCategory = isPending ? '—' : unreviewedCustomerItem.category;
-    const displayActivity = isPending ? '—' : unreviewedCustomerItem.activity;
+    // When review status is Needs Update, all 4 fields are displayed as "-"
+    const displayType = isPending ? '—' : unreviewedItem.type;
+    const displayCategory = isPending ? '—' : unreviewedItem.category;
+    const displayStatus = isPending ? '—' : unreviewedItem.status;
+    const displayActivity = isPending ? '—' : unreviewedItem.activity;
 
     expect(displayType).toBe('—');
     expect(displayCategory).toBe('—');
+    expect(displayStatus).toBe('—');
     expect(displayActivity).toBe('—');
 
-    // Once internal team reviews and updates it:
+    // Once internal team fills in all 4 fields and updates it:
     const reviewedItem: FeedbackItem = {
-      ...unreviewedCustomerItem,
+      ...unreviewedItem,
       type: 'Bug Report',
       category: 'Major',
+      status: 'Execution',
       activity: 'In progress',
       needs_review: false,
     };
 
-    const isStillPending = isCustomer && Boolean(reviewedItem.needs_review);
+    const isStillPending = Boolean(reviewedItem.needs_review);
+    expect(isStillPending).toBe(false);
     expect(isStillPending ? '—' : reviewedItem.type).toBe('Bug Report');
     expect(isStillPending ? '—' : reviewedItem.category).toBe('Major');
+    expect(isStillPending ? '—' : reviewedItem.status).toBe('Execution');
     expect(isStillPending ? '—' : reviewedItem.activity).toBe('In progress');
   });
 });

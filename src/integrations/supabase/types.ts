@@ -41,6 +41,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          pin: string | null
           pin_hash: string | null
           pin_version: number
         }
@@ -49,6 +50,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          pin?: string | null
           pin_hash?: string | null
           pin_version?: number
         }
@@ -57,6 +59,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          pin?: string | null
           pin_hash?: string | null
           pin_version?: number
         }
@@ -153,8 +156,11 @@ export type Database = {
           feature: string
           feedback: string
           id: string
+          image: string | null
+          needs_review: boolean
           notes: string
           number: number
+          report_date: string | null
           status: string
           type: string
           updated_at: string
@@ -172,8 +178,11 @@ export type Database = {
           feature?: string
           feedback: string
           id?: string
+          image?: string | null
+          needs_review?: boolean
           notes?: string
           number: number
+          report_date?: string | null
           status: string
           type: string
           updated_at?: string
@@ -191,8 +200,11 @@ export type Database = {
           feature?: string
           feedback?: string
           id?: string
+          image?: string | null
+          needs_review?: boolean
           notes?: string
           number?: number
+          report_date?: string | null
           status?: string
           type?: string
           updated_at?: string

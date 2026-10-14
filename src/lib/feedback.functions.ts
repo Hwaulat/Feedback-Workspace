@@ -8,7 +8,6 @@ import {
   type Customer,
   type FeedbackItem,
   type HistoryEntry,
-  type ItemInput,
 } from './feedback-model';
 import {
   getServerWorkspace,
@@ -33,7 +32,7 @@ export const getAccess = createServerFn({ method: 'GET' }).handler(async () => {
 });
 
 export const signIn = createServerFn({ method: 'POST' })
-  .inputValidator(v =>
+  .validator(v =>
     z
       .object({
         mode: z.enum(['admin', 'customer']),
@@ -68,10 +67,34 @@ export const signIn = createServerFn({ method: 'POST' })
         access = { role: 'admin', actor: data.actor, expires: Date.now() + SESSION_SECONDS * 1000 };
       }
     } else if (PIN_PATTERN.test(data.passcode)) {
+      const hash = pinHash(data.passcode);
+
       // 1. Check server-store customers
       const store = await readServerStore();
-      const hash = pinHash(data.passcode);
-      const cust = store.customers.find(c => c.pin === data.passcode || c.pin_hash === hash);
+      let cust = store.customers.find(c => c.pin === data.passcode || c.pin_hash === hash);
+
+      // 2. Check Supabase customers
+      if (!cust) {
+        try {
+          const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
+          const { data: sbCust } = await db
+            .from('feedback_customers')
+            .select('*')
+            .or(`pin.eq.${data.passcode},pin_hash.eq.${hash}`)
+            .eq('active', true)
+            .maybeSingle();
+          if (sbCust) {
+            cust = sbCust as any;
+            // Cache to server store
+            await syncClientDataToServer({
+              customers: [sbCust as any],
+              items: [],
+              history: [],
+            });
+          }
+        } catch {}
+      }
+
       if (cust) {
         if (!cust.active) {
           return { ok: false, error: 'This customer account is deactivated. Contact admin.' };
@@ -83,28 +106,6 @@ export const signIn = createServerFn({ method: 'POST' })
           pin_version: cust.pin_version,
           expires: Date.now() + SESSION_SECONDS * 1000,
         };
-      }
-
-      // 2. Fallback to Supabase if available
-      if (!access) {
-        try {
-          const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
-          const { data: customer } = await db
-            .from('feedback_customers')
-            .select('id,name,pin_version')
-            .eq('pin_hash', hash)
-            .eq('active', true)
-            .maybeSingle();
-          if (customer) {
-            access = {
-              role: 'customer',
-              actor: customer.name,
-              customer_id: customer.id,
-              pin_version: customer.pin_version,
-              expires: Date.now() + SESSION_SECONDS * 1000,
-            };
-          }
-        } catch {}
       }
     }
 
@@ -155,7 +156,30 @@ export const getWorkspace = createServerFn({ method: 'GET' }).handler(
       if (!access || access.expires < Date.now()) {
         return { customers: [], items: [], history: [] };
       }
-      return await getServerWorkspace(access);
+
+      const workspace = await getServerWorkspace(access);
+
+      // If local server-store has no items, check if Supabase has items
+      if (workspace.items.length === 0 && workspace.customers.length === 0) {
+        try {
+          const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
+          const [cq, iq, hq] = await Promise.all([
+            db.from('feedback_customers').select('*').order('name'),
+            db.from('feedback_items').select('*').order('number'),
+            db.from('feedback_history').select('*').order('created_at', { ascending: false }).limit(100),
+          ]);
+          if ((cq.data && cq.data.length > 0) || (iq.data && iq.data.length > 0)) {
+            await syncClientDataToServer({
+              customers: (cq.data ?? []) as any,
+              items: (iq.data ?? []) as any,
+              history: (hq.data ?? []) as any,
+            });
+            return await getServerWorkspace(access);
+          }
+        } catch {}
+      }
+
+      return workspace;
     } catch {
       return { customers: [], items: [], history: [] };
     }
@@ -163,7 +187,7 @@ export const getWorkspace = createServerFn({ method: 'GET' }).handler(
 );
 
 export const saveItem = createServerFn({ method: 'POST' })
-  .inputValidator(v =>
+  .validator(v =>
     z
       .object({
         item: itemSchema,
@@ -192,14 +216,23 @@ export const saveItem = createServerFn({ method: 'POST' })
     // Try mirroring to Supabase if configured
     try {
       const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
-      const { needs_review: _nr, image: _img, report_date: _rd, ...dbItem } = data.item;
+      const { needs_review: _nr, image: _img, ...dbItem } = data.item;
       if (data.id) {
         await db
           .from('feedback_items')
-          .update({ ...dbItem, actor: access.actor })
+          .update({
+            ...dbItem,
+            report_date: data.item.report_date ?? saved.report_date ?? null,
+            actor: access.actor,
+          })
           .eq('id', data.id);
       } else {
-        await db.from('feedback_items').insert({ ...dbItem, actor: access.actor, id: saved.id });
+        await db.from('feedback_items').insert({
+          ...dbItem,
+          id: saved.id,
+          report_date: saved.report_date ?? null,
+          actor: access.actor,
+        });
       }
     } catch {}
 
@@ -207,7 +240,7 @@ export const saveItem = createServerFn({ method: 'POST' })
   });
 
 export const deleteItem = createServerFn({ method: 'POST' })
-  .inputValidator(v =>
+  .validator(v =>
     z
       .object({
         id: z.string().uuid(),
@@ -238,7 +271,7 @@ export const deleteItem = createServerFn({ method: 'POST' })
   });
 
 export const manageCustomer = createServerFn({ method: 'POST' })
-  .inputValidator(v =>
+  .validator(v =>
     z
       .object({
         action: z.enum(['create', 'regenerate', 'toggle', 'delete']),
@@ -248,15 +281,45 @@ export const manageCustomer = createServerFn({ method: 'POST' })
       .parse(v),
   )
   .handler(async ({ data }) => {
-    const { requireAccess } = await import('./feedback-session.server');
+    const { requireAccess, pinHash } = await import('./feedback-session.server');
     const access = await requireAccess(true);
 
     const result = await manageServerCustomer(data.action, data.name, data.id, access.actor);
+
+    // Try Supabase mirror
+    try {
+      const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
+      if (data.action === 'create' && result.pin) {
+        await db.from('feedback_customers').insert({
+          name: data.name.trim(),
+          pin: result.pin,
+          pin_hash: pinHash(result.pin),
+          active: true,
+          pin_version: 1,
+        });
+      } else if (data.action === 'regenerate' && data.id && result.pin) {
+        await db
+          .from('feedback_customers')
+          .update({
+            pin: result.pin,
+            pin_hash: pinHash(result.pin),
+          })
+          .eq('id', data.id);
+      } else if (data.action === 'toggle' && data.id) {
+        const { data: current } = await db.from('feedback_customers').select('active').eq('id', data.id).single();
+        if (current) {
+          await db.from('feedback_customers').update({ active: !current.active }).eq('id', data.id);
+        }
+      } else if (data.action === 'delete' && data.id) {
+        await db.from('feedback_customers').delete().eq('id', data.id);
+      }
+    } catch {}
+
     return { pin: result.pin ?? null };
   });
 
 export const importFeedback = createServerFn({ method: 'POST' })
-  .inputValidator(v =>
+  .validator(v =>
     z
       .object({
         rows: z.array(
@@ -269,14 +332,46 @@ export const importFeedback = createServerFn({ method: 'POST' })
       .parse(v),
   )
   .handler(async ({ data }) => {
-    const { requireAccess } = await import('./feedback-session.server');
+    const { requireAccess, pinHash } = await import('./feedback-session.server');
     const access = await requireAccess(true);
 
-    return await importServerItems(data.rows as any, access.actor);
+    const result = await importServerItems(data.rows as any, access.actor);
+
+    // Try Supabase mirror
+    try {
+      const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
+      // Upsert customers
+      for (const p of result.pins) {
+        await db.from('feedback_customers').upsert(
+          {
+            name: p.name,
+            pin: p.pin,
+            pin_hash: pinHash(p.pin),
+            active: true,
+          },
+          { onConflict: 'name' },
+        );
+      }
+      // Upsert items
+      const store = await readServerStore();
+      for (const item of store.items) {
+        const { needs_review: _nr, image: _img, ...dbItem } = item;
+        await db.from('feedback_items').upsert(
+          {
+            ...dbItem,
+            report_date: item.report_date ?? null,
+            actor: access.actor,
+          },
+          { onConflict: 'customer_id,number' },
+        );
+      }
+    } catch {}
+
+    return result;
   });
 
 export const syncClientWorkspace = createServerFn({ method: 'POST' })
-  .inputValidator(v =>
+  .validator(v =>
     z
       .object({
         items: z.array(z.any()),
@@ -292,6 +387,37 @@ export const syncClientWorkspace = createServerFn({ method: 'POST' })
         customers: data.customers,
         history: data.history,
       });
+
+      // Mirror to Supabase
+      try {
+        const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
+        const { pinHash } = await import('./feedback-session.server');
+        for (const c of data.customers) {
+          await db.from('feedback_customers').upsert(
+            {
+              id: c.id,
+              name: c.name,
+              pin: c.pin || null,
+              pin_hash: c.pin ? pinHash(c.pin) : null,
+              active: c.active ?? true,
+              pin_version: c.pin_version ?? 1,
+            },
+            { onConflict: 'name' },
+          );
+        }
+        for (const i of data.items) {
+          const { needs_review: _nr, image: _img, ...dbItem } = i;
+          await db.from('feedback_items').upsert(
+            {
+              ...dbItem,
+              report_date: i.report_date ?? null,
+              actor: i.actor || 'Loop Team',
+            },
+            { onConflict: 'customer_id,number' },
+          );
+        }
+      } catch {}
+
       return { synced };
     } catch {
       return { synced: false };

@@ -50,10 +50,8 @@ export async function writeServerStore(data: ServerWorkspaceData): Promise<void>
   writeLock = writeLock
     .then(async () => {
       try {
-        const tmp = `${DB_FILE}.${randomUUID()}.tmp`;
         const json = JSON.stringify(data, null, 2);
-        await fs.writeFile(tmp, json, 'utf8');
-        await fs.rename(tmp, DB_FILE);
+        await fs.writeFile(DB_FILE, json, 'utf8');
       } catch (err) {
         // Read-only serverless filesystems (e.g. Vercel) - storage is handled by Supabase
       }
@@ -138,8 +136,20 @@ export async function saveServerItem(
   }
 
   // New feedback
+  const targetCustId = item.customer_id;
+  const custActiveItems = store.items.filter(i => i.customer_id === targetCustId && !i.deleted_at);
+  const maxActiveNum = custActiveItems.reduce((max, i) => Math.max(max, i.number || 0), 0);
+  const assignedNumber = isCustomer || !item.number ? maxActiveNum + 1 : item.number;
+
+  // Clean up any soft-deleted items with number >= assignedNumber for this customer
+  store.items = store.items.filter(
+    i => !(i.customer_id === targetCustId && i.number >= assignedNumber && i.deleted_at),
+  );
+
   const newItem: FeedbackItem = {
     ...item,
+    customer_id: targetCustId,
+    number: assignedNumber,
     id: randomUUID(),
     version: 1,
     report_date: item.report_date || todayWIB(),

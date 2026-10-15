@@ -239,6 +239,7 @@ export const saveItem = createServerFn({ method: 'POST' })
     const resolvedNeedsReview = isCustomerActor ? true : (data.item.needs_review ?? false);
     const resolvedImage = data.item.image !== undefined ? data.item.image : null;
     const { needs_review: _nr, image: _img, ...dbItem } = data.item;
+    const targetCustomerId = isCustomerActor ? access.customer_id! : data.item.customer_id;
 
     // 1. Primary: Save to Supabase Cloud
     try {
@@ -260,7 +261,12 @@ export const saveItem = createServerFn({ method: 'POST' })
             .select()
             .single();
 
-          if (!error && updated) {
+          if (error) {
+            console.error('[Supabase saveItem update error]:', error);
+            throw new Error(error.message || 'Failed to update feedback item.');
+          }
+
+          if (updated) {
             saved = {
               ...(updated as any),
               activity: (updated.activity === 'Pending' ? 'Not started' : updated.activity) as any,
@@ -269,27 +275,92 @@ export const saveItem = createServerFn({ method: 'POST' })
             };
           }
         } else {
-          const { data: inserted, error } = await db
-            .from('feedback_items')
-            .insert({
-              ...dbItem,
-              needs_review: resolvedNeedsReview,
-              image: resolvedImage,
-              report_date: data.item.report_date ?? null,
-              actor: access.actor,
-              version: 1,
-              updated_at: nowIso,
-            })
-            .select()
-            .single();
+          // For new feedback: determine next available number for this customer based on ACTIVE items
+          const targetCustomerId = isCustomerActor ? access.customer_id! : data.item.customer_id;
 
-          if (!error && inserted) {
-            saved = {
-              ...(inserted as any),
-              activity: (inserted.activity === 'Pending' ? 'Not started' : inserted.activity) as any,
-              needs_review: inserted.needs_review ?? false,
-              image: inserted.image ?? null,
-            };
+          let nextNumber = data.item.number;
+          if (isCustomerActor || !nextNumber) {
+            const { data: maxRow } = await db
+              .from('feedback_items')
+              .select('number')
+              .eq('customer_id', targetCustomerId)
+              .is('deleted_at', null)
+              .order('number', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            nextNumber = (maxRow?.number ?? 0) + 1;
+          }
+
+          // Clean up any soft-deleted items with number >= nextNumber for this customer so unique constraint is satisfied
+          await db
+            .from('feedback_items')
+            .delete()
+            .eq('customer_id', targetCustomerId)
+            .gte('number', nextNumber)
+            .not('deleted_at', 'is', null);
+
+          let insertAttempts = 0;
+          let lastInsertError: any = null;
+
+          while (insertAttempts < 5) {
+            insertAttempts++;
+            const { data: inserted, error } = await db
+              .from('feedback_items')
+              .insert({
+                ...dbItem,
+                customer_id: targetCustomerId,
+                number: nextNumber,
+                needs_review: resolvedNeedsReview,
+                image: resolvedImage,
+                report_date: data.item.report_date ?? null,
+                actor: access.actor,
+                version: 1,
+                updated_at: nowIso,
+              })
+              .select()
+              .single();
+
+            if (!error && inserted) {
+              saved = {
+                ...(inserted as any),
+                activity: (inserted.activity === 'Pending' ? 'Not started' : inserted.activity) as any,
+                needs_review: inserted.needs_review ?? false,
+                image: inserted.image ?? null,
+              };
+              lastInsertError = null;
+              break;
+            }
+
+            lastInsertError = error;
+            if (error?.code === '23505') {
+              // Unique constraint violation (customer_id, number) — purge soft-deleted conflicting row if any and retry
+              await db
+                .from('feedback_items')
+                .delete()
+                .eq('customer_id', targetCustomerId)
+                .eq('number', nextNumber)
+                .not('deleted_at', 'is', null);
+
+              const { data: latestMax } = await db
+                .from('feedback_items')
+                .select('number')
+                .eq('customer_id', targetCustomerId)
+                .is('deleted_at', null)
+                .order('number', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              nextNumber = Math.max(latestMax?.number ?? nextNumber, nextNumber) + 1;
+              continue;
+            }
+
+            break;
+          }
+
+          if (lastInsertError && !saved) {
+            console.error('[Supabase saveItem insert error]:', lastInsertError);
+            throw new Error(lastInsertError.message || 'Failed to submit feedback.');
           }
         }
 
@@ -307,15 +378,19 @@ export const saveItem = createServerFn({ method: 'POST' })
       }
     } catch (err) {
       console.warn('[Supabase saveItem fallback]:', err);
+      const errMsg = err instanceof Error ? err.message : '';
+      if (errMsg.includes('Failed to') || errMsg.includes('duplicate key') || errMsg.includes('violates')) {
+        throw err;
+      }
     }
 
     // 2. Fallback / local sync to server store
     try {
       const localSaved = await saveServerItem(
-        data.item,
+        saved ? { ...data.item, number: saved.number } : data.item,
         access.actor,
-        data.id,
-        data.version,
+        saved?.id || data.id,
+        saved?.version || data.version,
         access.role === 'customer',
       );
       if (!saved) saved = localSaved;

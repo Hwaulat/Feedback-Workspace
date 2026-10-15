@@ -28,9 +28,9 @@ function FeedbackPage() {
   const rows = useMemo(() => items
     .filter(i => (viewTrash ? Boolean(i.deleted_at) : !i.deleted_at)
       && (selectedCustomer === 'all' || i.customer_id === selectedCustomer)
-      && (type === 'all' || (i.needs_review ? false : i.type === type))
-      && (status === 'all' || (i.needs_review ? false : i.status === status))
-      && (activity === 'all' || (i.needs_review ? false : i.activity === activity || (activity === 'Not started' && (i.activity as string) === 'Pending')))
+      && (type === 'all' || i.type === type)
+      && (status === 'all' || i.status === status)
+      && (activity === 'all' || i.activity === activity || (activity === 'Not started' && (i.activity as string) === 'Pending'))
       && (reviewFilter === 'all' || (reviewFilter === 'needs_update' ? Boolean(i.needs_review) : !i.needs_review))
       && (search === '' || `${i.feature} ${i.feedback} ${i.notes} ${i.detail}`.toLowerCase().includes(search.toLowerCase())))
     .sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search]);

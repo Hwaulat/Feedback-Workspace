@@ -89,11 +89,11 @@ describe('Server Store Multi-Browser Synchronization', () => {
   });
 
   it('filters items for customer access', async () => {
-    await manageServerCustomer('create', 'Customer A');
-    await manageServerCustomer('create', 'Customer B');
+    const resA = await manageServerCustomer('create', 'Customer A');
+    const resB = await manageServerCustomer('create', 'Customer B');
     const store = await readServerStore();
-    const custA = store.customers.find(c => c.name === 'Customer A')!;
-    const custB = store.customers.find(c => c.name === 'Customer B')!;
+    const custA = resA.customer || store.customers.find(c => c.name === 'Customer A')!;
+    const custB = resB.customer || store.customers.find(c => c.name === 'Customer B')!;
 
     await saveServerItem(
       {
@@ -231,5 +231,189 @@ describe('Server Store Multi-Browser Synchronization', () => {
     expect(store.items[0]!.feedback).toBe('Uploaded in Chrome');
     expect(store.customers.length).toBe(1);
     expect(store.customers[0]!.pin_hash).toBeDefined();
+  });
+
+  it('guarantees sequential numbering on multiple consecutive customer submissions without skipping', async () => {
+    const { customer } = await manageServerCustomer('create', 'PT Customer Test');
+    expect(customer).toBeDefined();
+    const custId = customer!.id;
+
+    // Customer submit 1
+    const item1 = await saveServerItem(
+      {
+        customer_id: custId,
+        number: 1,
+        feature: 'Feature 1',
+        feedback: 'First customer feedback',
+        detail: '',
+        type: 'Bug Report',
+        category: 'Minor',
+        status: 'Waiting',
+        activity: 'Not started',
+        notes: '',
+        estimated_date: null,
+      },
+      'Customer Test',
+      undefined,
+      undefined,
+      true,
+    );
+
+    expect(item1.number).toBe(1);
+
+    // Customer submit 2
+    const item2 = await saveServerItem(
+      {
+        customer_id: custId,
+        number: 1, // client might send duplicate or stale number
+        feature: 'Feature 2',
+        feedback: 'Second customer feedback',
+        detail: '',
+        type: 'Bug Report',
+        category: 'Minor',
+        status: 'Waiting',
+        activity: 'Not started',
+        notes: '',
+        estimated_date: null,
+      },
+      'Customer Test',
+      undefined,
+      undefined,
+      true,
+    );
+
+    // Number must be 2, strictly sequential!
+    expect(item2.number).toBe(2);
+
+    // Customer submit 3
+    const item3 = await saveServerItem(
+      {
+        customer_id: custId,
+        number: 2,
+        feature: 'Feature 3',
+        feedback: 'Third customer feedback',
+        detail: '',
+        type: 'Bug Report',
+        category: 'Minor',
+        status: 'Waiting',
+        activity: 'Not started',
+        notes: '',
+        estimated_date: null,
+      },
+      'Customer Test',
+      undefined,
+      undefined,
+      true,
+    );
+
+    expect(item3.number).toBe(3);
+
+    // Verify all 3 items exist in customer workspace and none disappeared!
+    const ws = await getServerWorkspace({
+      role: 'customer',
+      actor: 'Customer Test',
+      customer_id: custId,
+      expires: Date.now() + 10000,
+    });
+
+    expect(ws.items.length).toBe(3);
+    const numbers = ws.items.map(i => i.number).sort((a, b) => a - b);
+    expect(numbers).toEqual([1, 2, 3]);
+  });
+
+  it('guarantees numbering increases sequentially even after an item is soft-deleted', async () => {
+    const { customer } = await manageServerCustomer('create', 'PT Delete Test');
+    const custId = customer!.id;
+
+    // Submit #1
+    const i1 = await saveServerItem(
+      {
+        customer_id: custId,
+        number: 1,
+        feature: 'A',
+        feedback: 'Item 1',
+        detail: '',
+        type: 'Bug Report',
+        category: 'Minor',
+        status: 'Waiting',
+        activity: 'Not started',
+        notes: '',
+        estimated_date: null,
+      },
+      'Customer',
+      undefined,
+      undefined,
+      true,
+    );
+    expect(i1.number).toBe(1);
+
+    // Submit #2
+    const i2 = await saveServerItem(
+      {
+        customer_id: custId,
+        number: 2,
+        feature: 'B',
+        feedback: 'Item 2',
+        detail: '',
+        type: 'Bug Report',
+        category: 'Minor',
+        status: 'Waiting',
+        activity: 'Not started',
+        notes: '',
+        estimated_date: null,
+      },
+      'Customer',
+      undefined,
+      undefined,
+      true,
+    );
+    expect(i2.number).toBe(2);
+
+    // Soft delete #2
+    await deleteServerItem(i2.id, i2.version, false, 'Admin');
+
+    // Customer workspace only sees #1 (not the deleted #2)
+    const wsBefore = await getServerWorkspace({
+      role: 'customer',
+      actor: 'Customer',
+      customer_id: custId,
+      expires: Date.now() + 10000,
+    });
+    expect(wsBefore.items.length).toBe(1);
+    expect(wsBefore.items[0]!.number).toBe(1);
+
+    // Customer now submits a new item. It MUST assign #2 (the next number after active item #1)!
+    const i3 = await saveServerItem(
+      {
+        customer_id: custId,
+        number: 1, // Client might send 1
+        feature: 'C',
+        feedback: 'Item 3 (replaces deleted 2)',
+        detail: '',
+        type: 'Bug Report',
+        category: 'Minor',
+        status: 'Waiting',
+        activity: 'Not started',
+        notes: '',
+        estimated_date: null,
+      },
+      'Customer',
+      undefined,
+      undefined,
+      true,
+    );
+
+    // Number must be 2, strictly following the active data (1 -> 2)!
+    expect(i3.number).toBe(2);
+
+    // Customer workspace now has both active items #1 and #2
+    const wsAfter = await getServerWorkspace({
+      role: 'customer',
+      actor: 'Customer',
+      customer_id: custId,
+      expires: Date.now() + 10000,
+    });
+    expect(wsAfter.items.length).toBe(2);
+    expect(wsAfter.items.map(i => i.number).sort((a, b) => a - b)).toEqual([1, 2]);
   });
 });

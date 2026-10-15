@@ -337,6 +337,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     const nowIso = new Date().toISOString();
     const isCustomerActor = access?.role === 'customer';
 
+    let tempId: string | null = null;
     // Optimistic local update
     if (existing) {
       const updatedItem: FeedbackItem = {
@@ -361,9 +362,10 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         existing.id,
       );
     } else {
+      tempId = crypto.randomUUID();
       const newItem: FeedbackItem = {
         ...parsed,
-        id: crypto.randomUUID(),
+        id: tempId,
         version: 1,
         report_date: parsed.report_date || todayWIB(),
         completion_date: parsed.activity === 'Done' ? todayWIB() : null,
@@ -386,17 +388,27 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
 
     // Server update
     try {
-      await saveFn({ data: { item: parsed, id: existing?.id, version: existing?.version } });
+      const res = await saveFn({ data: { item: parsed, id: existing?.id, version: existing?.version } });
+      if (res?.item && tempId) {
+        setItems(prev => prev.map(i => (i.id === tempId ? res.item : i)));
+      }
       await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
-    } catch {}
-
-    toast.success(
-      isCustomerActor
-        ? existing
-          ? 'Feedback updated successfully'
-          : 'Feedback submitted! Our team will review and update it.'
-        : 'Feedback saved successfully',
-    );
+      toast.success(
+        isCustomerActor
+          ? existing
+            ? 'Feedback updated successfully'
+            : 'Feedback submitted! Our team will review and update it.'
+          : 'Feedback saved successfully',
+      );
+      return res?.item;
+    } catch (err) {
+      if (tempId) {
+        setItems(prev => prev.filter(i => i.id !== tempId));
+      }
+      const msg = err instanceof Error ? err.message : 'Failed to save feedback.';
+      toast.error(msg);
+      throw err;
+    }
   }
 
   async function remove(item: FeedbackItem, restore = false) {

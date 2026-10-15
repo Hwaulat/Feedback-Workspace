@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
 import { queryOptions, useQueryClient, useSuspenseQuery, useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import {
@@ -128,6 +128,10 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
   const [loginOpen, setLoginOpen] = useState(false);
   const [clearOpen, setClearOpen] = useState(false);
 
+  // Mutation guard: prevents background refetch from overwriting optimistic state during save/delete
+  const mutatingCountRef = useRef(0);
+  const isMutating = useCallback(() => mutatingCountRef.current > 0, []);
+
   // Server data query with real-time sync across all browsers
   const { data: serverWorkspace } = useQuery({
     queryKey: ['feedback-workspace', clientAccess?.actor, clientAccess?.role],
@@ -137,9 +141,9 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     refetchOnWindowFocus: true,
   });
 
-  // Sync state when server data is received
+  // Sync state when server data is received — but SKIP if a mutation is in-flight
   useEffect(() => {
-    if (serverWorkspace && clientAccess) {
+    if (serverWorkspace && clientAccess && !isMutating()) {
       setItems(
         serverWorkspace.items.map(i => ({
           ...i,
@@ -151,7 +155,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       setCustomers(serverWorkspace.customers);
       setHistory(serverWorkspace.history);
     }
-  }, [serverWorkspace, clientAccess]);
+  }, [serverWorkspace, clientAccess, isMutating]);
 
   // Auto-migration: If client has existing uploaded items/customers in Chrome, push to server store
   useEffect(() => {
@@ -337,6 +341,9 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     const nowIso = new Date().toISOString();
     const isCustomerActor = access?.role === 'customer';
 
+    // Block background sync from overwriting optimistic state while saving
+    mutatingCountRef.current++;
+
     let tempId: string | null = null;
     // Optimistic local update
     if (existing) {
@@ -389,10 +396,13 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     // Server update
     try {
       const res = await saveFn({ data: { item: parsed, id: existing?.id, version: existing?.version } });
+      // Replace optimistic item with the real server item (which has the true id & number)
       if (res?.item && tempId) {
         setItems(prev => prev.map(i => (i.id === tempId ? res.item : i)));
+      } else if (res?.item && existing) {
+        // For updates, also replace with the canonical server version
+        setItems(prev => prev.map(i => (i.id === existing.id ? res.item : i)));
       }
-      await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
       toast.success(
         isCustomerActor
           ? existing
@@ -400,11 +410,18 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
             : 'Feedback submitted! Our team will review and update it.'
           : 'Feedback saved successfully',
       );
+      // Release the mutation guard and refresh from server to get authoritative state
+      mutatingCountRef.current = Math.max(0, mutatingCountRef.current - 1);
+      await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
       return res?.item;
     } catch (err) {
+      // Rollback optimistic item on failure
       if (tempId) {
         setItems(prev => prev.filter(i => i.id !== tempId));
       }
+      // Release mutation guard even on error
+      mutatingCountRef.current = Math.max(0, mutatingCountRef.current - 1);
+      await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
       const msg = err instanceof Error ? err.message : 'Failed to save feedback.';
       toast.error(msg);
       throw err;
@@ -420,6 +437,9 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       toast.error("Feedback with activity status 'Done' cannot be deleted.");
       return;
     }
+    // Block background sync from overwriting optimistic state while deleting
+    mutatingCountRef.current++;
+
     const updated: FeedbackItem = {
       ...item,
       deleted_at: restore ? null : new Date().toISOString(),
@@ -438,8 +458,11 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
 
     try {
       await deleteFn({ data: { id: item.id, version: item.version, restore } });
+    } catch {
+    } finally {
+      mutatingCountRef.current = Math.max(0, mutatingCountRef.current - 1);
       await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
-    } catch {}
+    }
 
     toast.success(restore ? 'Feedback restored successfully' : 'Feedback deleted successfully');
   }

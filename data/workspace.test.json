@@ -1,18 +1,18 @@
 {
   "customers": [
     {
-      "id": "c461f57a-7b32-4624-8e73-4541e01bfd25",
+      "id": "a8bc4e9b-4e60-4673-8469-4b5e2ea8f3e5",
       "name": "PT Delete Test",
       "active": true,
-      "pin": "254274",
-      "pin_hash": "82631a83c322a9eec054044f419ce97ecf1dfc1aa345c9ed76325a3f14481217",
+      "pin": "159344",
+      "pin_hash": "2de78765749d887c8901f28efde853a56743742fc356f278f7fbf8742215dd6a",
       "pin_version": 1,
-      "created_at": "2026-10-15T04:35:53.199Z"
+      "created_at": "2026-10-15T05:04:45.068Z"
     }
   ],
   "items": [
     {
-      "customer_id": "c461f57a-7b32-4624-8e73-4541e01bfd25",
+      "customer_id": "a8bc4e9b-4e60-4673-8469-4b5e2ea8f3e5",
       "number": 2,
       "feature": "C",
       "feedback": "Item 3 (replaces deleted 2)",
@@ -23,18 +23,18 @@
       "activity": "Not started",
       "notes": "",
       "estimated_date": null,
-      "id": "7b691f8b-b66e-4da9-beba-279de9236afd",
+      "id": "b7fa7464-e7cf-4d31-a73e-8a7ccde8d5e4",
       "version": 1,
       "report_date": "2026-10-15",
       "completion_date": null,
       "deleted_at": null,
-      "updated_at": "2026-10-15T04:35:53.221Z",
+      "updated_at": "2026-10-15T05:04:45.148Z",
       "actor": "Customer",
       "needs_review": true,
       "image": null
     },
     {
-      "customer_id": "c461f57a-7b32-4624-8e73-4541e01bfd25",
+      "customer_id": "a8bc4e9b-4e60-4673-8469-4b5e2ea8f3e5",
       "number": 1,
       "feature": "A",
       "feedback": "Item 1",
@@ -45,12 +45,12 @@
       "activity": "Not started",
       "notes": "",
       "estimated_date": null,
-      "id": "cac682b0-dcb8-4860-a5cc-643036b73a6f",
+      "id": "39bfe344-66ea-4339-9883-1270791a0d2f",
       "version": 1,
       "report_date": "2026-10-15",
       "completion_date": null,
       "deleted_at": null,
-      "updated_at": "2026-10-15T04:35:53.204Z",
+      "updated_at": "2026-10-15T05:04:45.086Z",
       "actor": "Customer",
       "needs_review": true,
       "image": null
@@ -58,59 +58,59 @@
   ],
   "history": [
     {
-      "id": "5af7c7d8-e89b-4795-8328-ff26405e3f7a",
-      "customer_id": "c461f57a-7b32-4624-8e73-4541e01bfd25",
-      "item_id": "7b691f8b-b66e-4da9-beba-279de9236afd",
+      "id": "a29f4bdf-6390-4185-8db6-4a256e1a9caa",
+      "customer_id": "a8bc4e9b-4e60-4673-8469-4b5e2ea8f3e5",
+      "item_id": "b7fa7464-e7cf-4d31-a73e-8a7ccde8d5e4",
       "action": "Submitted feedback (Customer)",
       "field": "feedback",
       "old_value": null,
       "new_value": "Item 3 (replaces deleted 2)",
       "actor": "Customer",
-      "created_at": "2026-10-15T04:35:53.221Z"
+      "created_at": "2026-10-15T05:04:45.148Z"
     },
     {
-      "id": "c9dc899a-57c2-4af9-9fb2-c1aa88f35160",
-      "customer_id": "c461f57a-7b32-4624-8e73-4541e01bfd25",
-      "item_id": "31715556-9ecc-498e-afb7-9e61885583d5",
+      "id": "51dad8ae-4d4f-40d2-bbaf-318c36919d12",
+      "customer_id": "a8bc4e9b-4e60-4673-8469-4b5e2ea8f3e5",
+      "item_id": "a02ee147-fe57-422b-aa64-f853b2941d2a",
       "action": "Deleted feedback",
       "field": "status",
       "old_value": null,
       "new_value": "Deleted",
       "actor": "Admin",
-      "created_at": "2026-10-15T04:35:53.215Z"
+      "created_at": "2026-10-15T05:04:45.123Z"
     },
     {
-      "id": "1c0a1900-ee64-450e-af98-071385c3a5c0",
-      "customer_id": "c461f57a-7b32-4624-8e73-4541e01bfd25",
-      "item_id": "31715556-9ecc-498e-afb7-9e61885583d5",
+      "id": "776ebe32-59a5-4c13-995a-b4c20caad8fc",
+      "customer_id": "a8bc4e9b-4e60-4673-8469-4b5e2ea8f3e5",
+      "item_id": "a02ee147-fe57-422b-aa64-f853b2941d2a",
       "action": "Submitted feedback (Customer)",
       "field": "feedback",
       "old_value": null,
       "new_value": "Item 2",
       "actor": "Customer",
-      "created_at": "2026-10-15T04:35:53.210Z"
+      "created_at": "2026-10-15T05:04:45.108Z"
     },
     {
-      "id": "cc98d190-89a8-4e5f-aa2f-7036cebe1ef0",
-      "customer_id": "c461f57a-7b32-4624-8e73-4541e01bfd25",
-      "item_id": "cac682b0-dcb8-4860-a5cc-643036b73a6f",
+      "id": "51a7863e-302a-40fd-9fb3-732496ac7c15",
+      "customer_id": "a8bc4e9b-4e60-4673-8469-4b5e2ea8f3e5",
+      "item_id": "39bfe344-66ea-4339-9883-1270791a0d2f",
       "action": "Submitted feedback (Customer)",
       "field": "feedback",
       "old_value": null,
       "new_value": "Item 1",
       "actor": "Customer",
-      "created_at": "2026-10-15T04:35:53.204Z"
+      "created_at": "2026-10-15T05:04:45.086Z"
     },
     {
-      "id": "92324222-a719-4fdc-a935-f0789b840208",
-      "customer_id": "c461f57a-7b32-4624-8e73-4541e01bfd25",
+      "id": "8aaf4f3d-e43c-48cc-9f4c-a0ce6efcaeb5",
+      "customer_id": "a8bc4e9b-4e60-4673-8469-4b5e2ea8f3e5",
       "item_id": null,
       "action": "Created customer",
       "field": "name",
       "old_value": null,
       "new_value": "PT Delete Test",
       "actor": "Loop Team",
-      "created_at": "2026-10-15T04:35:53.199Z"
+      "created_at": "2026-10-15T05:04:45.068Z"
     }
   ]
 }

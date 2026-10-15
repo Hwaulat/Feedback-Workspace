@@ -33,7 +33,7 @@ function FeedbackPage() {
       && (activity === 'all' || i.activity === activity || (activity === 'Not started' && (i.activity as string) === 'Pending'))
       && (reviewFilter === 'all' || (reviewFilter === 'needs_update' ? Boolean(i.needs_review) : !i.needs_review))
       && (search === '' || `${i.feature} ${i.feedback} ${i.notes} ${i.detail}`.toLowerCase().includes(search.toLowerCase())))
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at)), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search]);
+    .sort((a, b) => b.number - a.number), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search]);
 
   const open = (item: FeedbackItem) => (canManage ? setEditing(item) : setDetail(item));
   const needsUpdateCount = items.filter(i => !i.deleted_at && i.needs_review).length;

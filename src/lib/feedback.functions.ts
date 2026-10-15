@@ -413,18 +413,22 @@ export const deleteItem = createServerFn({ method: 'POST' })
   )
   .handler(async ({ data }) => {
     const { requireAccess } = await import('./feedback-session.server');
-    const access = await requireAccess(true);
+    const access = await requireAccess(); // Allow both admin and customer
     const nowIso = new Date().toISOString();
 
     // 1. Try Supabase
     try {
       const { supabaseAdmin: db, hasSupabaseAdmin } = await import('@/integrations/supabase/client.server');
       if (hasSupabaseAdmin()) {
-        const { data: current } = await db.from('feedback_items').select('activity').eq('id', data.id).single();
+        const { data: current } = await db.from('feedback_items').select('activity, customer_id').eq('id', data.id).single();
         if (current && !data.restore && current.activity === 'Done') {
           throw new Error("Feedback with activity status 'Done' cannot be deleted.");
         }
-        await db
+        // Customer can only delete their own items
+        if (access.role === 'customer' && current && current.customer_id !== access.customer_id) {
+          throw new Error('You can only delete your own feedback items.');
+        }
+        const { error: updateError } = await db
           .from('feedback_items')
           .update({
             deleted_at: data.restore ? null : nowIso,
@@ -433,6 +437,11 @@ export const deleteItem = createServerFn({ method: 'POST' })
             actor: access.actor,
           })
           .eq('id', data.id);
+
+        if (updateError) {
+          console.warn('[Supabase deleteItem error]:', updateError);
+          throw updateError;
+        }
 
         await db.from('feedback_history').insert({
           item_id: data.id,
@@ -445,12 +454,19 @@ export const deleteItem = createServerFn({ method: 'POST' })
       }
     } catch (err) {
       console.warn('[Supabase deleteItem fallback]:', err);
+      if (err instanceof Error && (err.message.includes('Done') || err.message.includes('only delete your own'))) {
+        throw err;
+      }
     }
 
     // 2. Try server-store
     try {
       await deleteServerItem(data.id, data.version, data.restore, access.actor);
-    } catch {}
+    } catch (storeErr) {
+      if (storeErr instanceof Error && storeErr.message.includes('Done')) {
+        throw storeErr;
+      }
+    }
 
     return { ok: true };
   });

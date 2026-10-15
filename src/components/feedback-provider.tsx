@@ -458,13 +458,16 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
 
     try {
       await deleteFn({ data: { id: item.id, version: item.version, restore } });
-    } catch {
+      toast.success(restore ? 'Feedback restored successfully' : 'Feedback deleted successfully');
+    } catch (err) {
+      // Rollback: revert the optimistic delete/restore since server rejected it
+      setItems(prev => prev.map(r => (r.id === item.id ? item : r)));
+      const msg = err instanceof Error ? err.message : 'Failed to delete feedback.';
+      toast.error(msg);
     } finally {
       mutatingCountRef.current = Math.max(0, mutatingCountRef.current - 1);
       await queryClient.invalidateQueries({ queryKey: ['feedback-workspace'] });
     }
-
-    toast.success(restore ? 'Feedback restored successfully' : 'Feedback deleted successfully');
   }
 
   // Feature: Customer Management & 6-digit PIN Generation

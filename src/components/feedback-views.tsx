@@ -477,15 +477,62 @@ export function FormModal({
   const [newCustName, setNewCustName] = useState('');
 
   // Target customer ID for determining the next number
+  // Target customer ID for determining the next number
   const initialCustId = isCustomer ? defaultCustId : (item ? item.customer_id : defaultCustId);
   const [selectedCustId, setSelectedCustId] = useState(initialCustId);
 
   // Auto next number calculated from the last feedback number for that customer
   const autoNextNumber = useMemo(() => {
     const activeId = isCustomer ? defaultCustId : (selectedCustId || defaultCustId);
-    const custItems = items.filter(i => i.customer_id === activeId);
+    const custItems = items.filter(i => i.customer_id === activeId && !i.deleted_at);
     const nums = custItems.map(i => i.number).filter(n => typeof n === 'number' && !isNaN(n));
     return nums.length > 0 ? Math.max(...nums) + 1 : 1;
+  }, [items, isCustomer, defaultCustId, selectedCustId]);
+
+  // Collect all unique feature titles from workspace items and localStorage
+  const savedFeatures = useMemo(() => {
+    const featureCount = new Map<string, number>();
+    const featureLastSeen = new Map<string, number>();
+    const activeCustId = isCustomer ? defaultCustId : (selectedCustId || defaultCustId);
+
+    // 1. Gather all feature titles from existing workspace items
+    items.forEach((i, idx) => {
+      const f = (i.feature || '').trim();
+      if (f) {
+        const isMatchCustomer = i.customer_id === activeCustId;
+        const weight = isMatchCustomer ? 0 : 500;
+        featureCount.set(f, (featureCount.get(f) ?? 0) + 1);
+        if (!featureLastSeen.has(f) || isMatchCustomer) {
+          featureLastSeen.set(f, idx + weight);
+        }
+      }
+    });
+
+    // 2. Also load persistent features from localStorage
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('loop_saved_features');
+        if (stored) {
+          const list: string[] = JSON.parse(stored);
+          if (Array.isArray(list)) {
+            list.forEach(f => {
+              const trimmed = typeof f === 'string' ? f.trim() : '';
+              if (trimmed && !featureCount.has(trimmed)) {
+                featureCount.set(trimmed, 1);
+                featureLastSeen.set(trimmed, 1000);
+              }
+            });
+          }
+        }
+      }
+    } catch {}
+
+    return Array.from(featureCount.keys()).sort((a, b) => {
+      const recA = featureLastSeen.get(a) ?? 9999;
+      const recB = featureLastSeen.get(b) ?? 9999;
+      if (recA !== recB) return recA - recB;
+      return a.localeCompare(b, undefined, { sensitivity: 'base' });
+    });
   }, [items, isCustomer, defaultCustId, selectedCustId]);
 
   const [form, setForm] = useState<ItemInput>(() => item
@@ -552,12 +599,26 @@ export function FormModal({
       // For customer, number is preserved if editing or auto-generated if creating
       const assignedNumber = item ? item.number : isCustomer ? autoNextNumber : Number(form.number);
 
+      const trimmedFeature = form.feature.trim();
+      // Persist the feature title to localStorage so it is remembered for future submissions
+      if (trimmedFeature) {
+        try {
+          if (typeof window !== 'undefined') {
+            const raw = localStorage.getItem('loop_saved_features');
+            const list: string[] = raw ? JSON.parse(raw) : [];
+            const filtered = list.filter(f => f.toLowerCase() !== trimmedFeature.toLowerCase());
+            filtered.unshift(trimmedFeature);
+            localStorage.setItem('loop_saved_features', JSON.stringify(filtered.slice(0, 100)));
+          }
+        } catch {}
+      }
+
       await save({
         ...form,
         customer_id: finalCustId,
         number: assignedNumber,
         report_date: isCustomer ? (item ? (item.report_date ?? item.updated_at.slice(0, 10)) : todayWIB()) : (form.report_date || todayWIB()),
-        feature: form.feature.trim(),
+        feature: trimmedFeature,
         feedback: form.feedback.trim(),
         detail: form.detail.trim(),
         image: form.image || null,
@@ -577,6 +638,88 @@ export function FormModal({
   }
 
   const customerItemNumber = item ? item.number : autoNextNumber;
+
+  const renderFeatureField = () => (
+    <div className="form-field full">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+        <label style={{ fontSize: 14, fontWeight: 500 }}>Feature</label>
+        {savedFeatures.length > 0 && (
+          <span style={{ fontSize: 12, color: 'var(--muted-foreground)', fontWeight: 400 }}>
+            {savedFeatures.length} saved feature{savedFeatures.length > 1 ? 's' : ''} available
+          </span>
+        )}
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', flexWrap: 'wrap' }}>
+        <input
+          list="feature-suggestions-list"
+          maxLength={200}
+          value={form.feature}
+          onChange={set('feature')}
+          placeholder={savedFeatures.length > 0 ? "Select from saved features or type a new one..." : "e.g. Dashboard navigation, Export to PDF"}
+          style={{ flex: '1 1 220px', minWidth: 0 }}
+          autoComplete="off"
+        />
+        {savedFeatures.length > 0 && (
+          <select
+            value=""
+            onChange={e => {
+              if (e.target.value) {
+                setForm(f => ({ ...f, feature: e.target.value }));
+              }
+            }}
+            style={{
+              flex: '0 0 auto',
+              maxWidth: '100%',
+              cursor: 'pointer',
+              fontSize: '13px',
+              padding: '8px 10px',
+              background: 'var(--secondary)',
+              borderColor: 'var(--border)',
+              color: 'var(--foreground)',
+              borderRadius: '5px',
+            }}
+            title="Pick a previously entered feature"
+            aria-label="Pick a previously entered feature"
+          >
+            <option value="">▼ Saved features ({savedFeatures.length})</option>
+            {savedFeatures.map(feat => (
+              <option key={feat} value={feat}>{feat}</option>
+            ))}
+          </select>
+        )}
+      </div>
+      <datalist id="feature-suggestions-list">
+        {savedFeatures.map(feat => (
+          <option key={feat} value={feat} />
+        ))}
+      </datalist>
+      {savedFeatures.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+          <span style={{ fontSize: 12, color: 'var(--muted-foreground)', alignSelf: 'center' }}>Recent:</span>
+          {savedFeatures.slice(0, 4).map(feat => (
+            <button
+              type="button"
+              key={feat}
+              onClick={() => setForm(f => ({ ...f, feature: feat }))}
+              style={{
+                fontSize: 12,
+                padding: '2px 8px',
+                borderRadius: 12,
+                border: form.feature === feat ? '1px solid var(--primary)' : '1px solid var(--border)',
+                background: form.feature === feat ? 'var(--primary)' : 'var(--secondary)',
+                color: form.feature === feat ? 'var(--primary-foreground)' : 'var(--foreground)',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+              title={`Click to use "${feat}"`}
+            >
+              {feat}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div
@@ -643,15 +786,7 @@ export function FormModal({
                     {item ? 'Recorded on submission' : 'Set to today upon submission'}
                   </span>
                 </label>
-                <label className="form-field full">
-                  Feature
-                  <input
-                    maxLength={200}
-                    value={form.feature}
-                    onChange={set('feature')}
-                    placeholder="e.g. Dashboard navigation, Export to PDF"
-                  />
-                </label>
+                {renderFeatureField()}
                 <label className="form-field full">
                   Feedback
                   <textarea
@@ -714,7 +849,7 @@ export function FormModal({
                     title="Date feedback was submitted"
                   />
                 </label>
-                <label className="form-field full">Feature<input maxLength={200} value={form.feature} onChange={set('feature')} placeholder="e.g. Reporting" /></label>
+                {renderFeatureField()}
                 <label className="form-field full">Feedback<textarea required maxLength={1000} value={form.feedback} onChange={set('feedback')} placeholder="Describe the feedback" /></label>
                 <label className="form-field full">Detail information<textarea maxLength={5000} value={form.detail} onChange={set('detail')} placeholder="Optional background or steps" /></label>
                 <div className="form-field full">

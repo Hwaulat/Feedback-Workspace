@@ -5,7 +5,7 @@ import { FileUp, Download, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useWorkspace } from '@/components/feedback-provider';
-import { TeamOnly, activityBadge, categoryBadge, fmtDate, fmtReportDate } from '@/components/feedback-views';
+import { TeamOnly, activityBadge, categoryBadge, typeBadge, fmtDate, fmtReportDate } from '@/components/feedback-views';
 import { downloadTemplate, previewImport, commitImport, type ImportPreview } from '@/lib/excel.functions';
 import { MAX_IMPORT_BYTES, MAX_IMPORT_ROWS } from '@/lib/feedback-model';
 
@@ -317,19 +317,14 @@ function UploadInner() {
                 </label>
                 <select
                   id="customer-select"
+                  className="filter-select"
                   value={selectedCustomer}
                   onChange={e => handleCustomerChange(e.target.value)}
                   disabled={busy === 'commit'}
                   style={{
                     height: 36,
-                    padding: '0 12px',
-                    borderRadius: 6,
-                    border: '1px solid var(--border, #333)',
-                    background: 'var(--background, #18191b)',
-                    color: 'inherit',
                     fontSize: 15,
                     fontWeight: 500,
-                    outline: 'none',
                     minWidth: 160,
                   }}
                 >
@@ -399,7 +394,7 @@ function UploadInner() {
                       <td>{r.number}</td>
                       <td><div className="feedback-title">{r.feature || '—'}</div></td>
                       <td><div className="feedback-title">{r.feedback}</div></td>
-                      <td>{r.type}</td>
+                      <td>{r.type ? <span className={`badge ${typeBadge(r.type)}`}>{r.type}</span> : '—'}</td>
                       <td><span className={`badge ${categoryBadge(r.category)}`}>{r.category}</span></td>
                       <td>{r.status}</td>
                       <td><span className={`badge ${activityBadge(r.activity)}`}>{r.activity}</span></td>

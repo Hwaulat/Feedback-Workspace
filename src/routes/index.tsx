@@ -3,7 +3,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { Inbox, CheckCircle2, LoaderCircle, Hourglass, GitPullRequest, ArrowRight, Download, X, ClipboardCheck, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
-import { DetailModal, activityBadge, categoryBadge, statusBadge, fmtDate, fmtReportDate } from '@/components/feedback-views';
+import { DetailModal, activityBadge, categoryBadge, statusBadge, typeBadge, fmtDate, fmtReportDate } from '@/components/feedback-views';
 import { types, categories, statuses, activities, isOverdue, isNeedsUpdate, type FeedbackItem } from '@/lib/feedback-model';
 
 export const Route = createFileRoute('/')({
@@ -59,20 +59,25 @@ function Overview() {
     }
   };
 
+  const defaultReviewFilter = popupCategory === 'needs_update' ? 'needs_update' : popupCategory === 'updated' ? 'updated' : 'all';
+  const defaultTypeFilter = popupCategory === 'changerequest' ? 'Change Request' : 'all';
+  const defaultActivityFilter =
+    popupCategory === 'done' ? 'Done' : popupCategory === 'inprogress' ? 'In progress' : popupCategory === 'notstarted' ? 'Not started' : 'all';
+
   const hasActiveModalFilters =
-    modalReviewFilter !== 'all' ||
-    modalTypeFilter !== 'all' ||
+    modalReviewFilter !== defaultReviewFilter ||
+    modalTypeFilter !== defaultTypeFilter ||
     modalCategoryFilter !== 'all' ||
     modalStatusFilter !== 'all' ||
-    modalActivityFilter !== 'all' ||
+    modalActivityFilter !== defaultActivityFilter ||
     modalSearch.trim().length > 0;
 
   const resetModalFilters = () => {
-    setModalReviewFilter('all');
-    setModalTypeFilter('all');
+    setModalReviewFilter(defaultReviewFilter);
+    setModalTypeFilter(defaultTypeFilter);
     setModalCategoryFilter('all');
     setModalStatusFilter('all');
-    setModalActivityFilter('all');
+    setModalActivityFilter(defaultActivityFilter);
     setModalSearch('');
   };
 
@@ -385,7 +390,7 @@ function Overview() {
           </div>
         </div>
 
-        <div className="metric">
+        <div className="metric" style={{ cursor: 'pointer' }} onClick={() => openPopup('done')}>
           <div className="metric-top">
             <span>Done</span>
             <span className="metric-icon success"><CheckCircle2 /></span>
@@ -396,7 +401,10 @@ function Overview() {
             <button
               type="button"
               className="metric-tertiary-btn"
-              onClick={() => openPopup('done')}
+              onClick={e => {
+                e.stopPropagation();
+                openPopup('done');
+              }}
               aria-label="View Done feedback details"
             >
               Details &rarr;
@@ -404,7 +412,7 @@ function Overview() {
           </div>
         </div>
 
-        <div className="metric">
+        <div className="metric" style={{ cursor: 'pointer' }} onClick={() => openPopup('inprogress')}>
           <div className="metric-top">
             <span>In progress</span>
             <span className="metric-icon"><LoaderCircle /></span>
@@ -415,7 +423,10 @@ function Overview() {
             <button
               type="button"
               className="metric-tertiary-btn"
-              onClick={() => openPopup('inprogress')}
+              onClick={e => {
+                e.stopPropagation();
+                openPopup('inprogress');
+              }}
               aria-label="View In progress feedback details"
             >
               Details &rarr;
@@ -423,7 +434,7 @@ function Overview() {
           </div>
         </div>
 
-        <div className="metric">
+        <div className="metric" style={{ cursor: 'pointer' }} onClick={() => openPopup('notstarted')}>
           <div className="metric-top">
             <span>Not started</span>
             <span className="metric-icon danger"><Hourglass /></span>
@@ -434,7 +445,10 @@ function Overview() {
             <button
               type="button"
               className="metric-tertiary-btn"
-              onClick={() => openPopup('notstarted')}
+              onClick={e => {
+                e.stopPropagation();
+                openPopup('notstarted');
+              }}
               aria-label="View Not started feedback details"
             >
               Details &rarr;
@@ -442,7 +456,7 @@ function Overview() {
           </div>
         </div>
 
-        <div className="metric">
+        <div className="metric" style={{ cursor: 'pointer' }} onClick={() => openPopup('changerequest')}>
           <div className="metric-top">
             <span>Change Request</span>
             <span className="metric-icon info"><GitPullRequest /></span>
@@ -453,7 +467,10 @@ function Overview() {
             <button
               type="button"
               className="metric-tertiary-btn"
-              onClick={() => openPopup('changerequest')}
+              onClick={e => {
+                e.stopPropagation();
+                openPopup('changerequest');
+              }}
               aria-label="View Change Request feedback details"
             >
               Details &rarr;
@@ -523,7 +540,13 @@ function Overview() {
             {typeCounts.map(t => (
               <div className="bar-col" key={t.label}>
                 <span>{t.value}</span>
-                <div className="bar-rect" style={{ height: `${Math.max(3, (t.value / maxType) * 100)}%` }} />
+                <div
+                  className="bar-rect"
+                  style={{
+                    height: `${Math.max(3, (t.value / maxType) * 100)}%`,
+                    backgroundColor: t.label === 'Complaint' ? '#2563eb' : t.label === 'Change Request' ? '#dc2626' : '#ea580c',
+                  }}
+                />
               </div>
             ))}
           </div>
@@ -719,7 +742,13 @@ function Overview() {
                         )}
                       </td>
                     )}
-                    <td>{item.needs_review ? <span className="text-muted-foreground">—</span> : item.type}</td>
+                    <td>
+                      {item.needs_review ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span className={`badge ${typeBadge(item.type)}`}>{item.type}</span>
+                      )}
+                    </td>
                     <td>
                       {item.needs_review ? (
                         <span className="text-muted-foreground">—</span>
@@ -758,9 +787,9 @@ function Overview() {
                 <span className="badge" style={{ fontSize: 13, background: '#02A9EA', color: '#ffffff', fontWeight: 600 }}>
                   {modalFilteredItems.length} items
                 </span>
-                {modalFilteredItems.length !== active.length && (
+                {modalFilteredItems.length !== (popupData.items?.length ?? active.length) && (
                   <span className="text-muted-foreground text-xs">
-                    (filtered from {active.length})
+                    (filtered from {popupData.items?.length ?? active.length})
                   </span>
                 )}
               </div>
@@ -943,7 +972,13 @@ function Overview() {
                                 </span>
                               )}
                             </td>
-                            <td>{item.needs_review ? <span className="text-muted-foreground">—</span> : item.type}</td>
+                            <td>
+                              {item.needs_review ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                <span className={`badge ${typeBadge(item.type)}`}>{item.type}</span>
+                              )}
+                            </td>
                             <td>
                               {item.needs_review ? (
                                 <span className="text-muted-foreground">—</span>

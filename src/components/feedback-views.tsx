@@ -9,6 +9,14 @@ export const activityBadge = (a: string) => (a === 'Done' ? 'done' : a === 'In p
 export const categoryBadge = (c: string) => (c === 'Major' ? 'major' : c === 'Medium' ? 'medium' : '');
 export const statusBadge = (s: string) => (s === 'Waiting' ? 'status-waiting' : s === 'Execution' ? 'status-execution' : s === 'Execution by notes' ? 'status-execution-notes' : '');
 export const reviewBadge = (needsReview?: boolean) => (needsReview ? 'needs-update' : 'updated');
+export const typeBadge = (t?: string | null) => {
+  if (!t) return '';
+  const clean = t.trim().toLowerCase();
+  if (clean === 'complaint') return 'type-complaint';
+  if (clean === 'change request') return 'type-changerequest';
+  if (clean === 'bug report') return 'type-bugreport';
+  return '';
+};
 export function fmtDate(d?: string | null) { if (!d) return '—'; return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(d)); }
 export function fmtDateTime(iso?: string | null) {
   if (!iso) return '—';
@@ -70,14 +78,14 @@ export function TeamOnly({ children }: { children: ReactNode }) {
         </div>
         <p className="font-medium text-base mb-1">Restricted Access for {access.pic_name || 'Customer Portal'}</p>
         <p className="text-muted-foreground text-sm mb-4">
-          As a customer account, you can only access the <strong>Dashboard (Overview)</strong> and <strong>Feedback list</strong>.
+          As a customer account, you can only access the <strong>Dashboard (Overview)</strong> and <strong>Ticketing List</strong>.
         </p>
         <div className="flex gap-2 justify-center">
           <Button asChild size="sm">
             <Link to="/">Go to Dashboard</Link>
           </Button>
           <Button asChild variant="outline" size="sm">
-            <Link to="/feedback">Go to Feedback list</Link>
+            <Link to="/feedback">Go to Ticketing List</Link>
           </Button>
         </div>
       </div>
@@ -140,9 +148,12 @@ export function ImageLightboxModal({
   onClose: () => void;
 }) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [fitMode, setFitMode] = useState<'cover' | 'contain' | 'fill'>('cover');
+  const [zoomLevel, setZoomLevel] = useState<number>(1);
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
+    setZoomLevel(1);
   }, [initialIndex]);
 
   useEffect(() => {
@@ -150,9 +161,11 @@ export function ImageLightboxModal({
       if (e.key === 'Escape') onClose();
       if (e.key === 'ArrowLeft' && images.length > 1) {
         setCurrentIndex(prev => (prev > 0 ? prev - 1 : images.length - 1));
+        setZoomLevel(1);
       }
       if (e.key === 'ArrowRight' && images.length > 1) {
         setCurrentIndex(prev => (prev < images.length - 1 ? prev + 1 : 0));
+        setZoomLevel(1);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -193,42 +206,121 @@ export function ImageLightboxModal({
             color: '#fff',
             zIndex: 10,
             flexShrink: 0,
+            gap: 8,
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>
               Image preview (600 × 600)
             </span>
             {images.length > 1 && (
               <span
                 style={{
-                  fontSize: 12,
-                  padding: '2px 8px',
+                  fontSize: 11,
+                  padding: '1px 7px',
                   borderRadius: 10,
                   background: 'rgba(255,255,255,0.15)',
                   color: '#93c5fd',
+                  fontWeight: 600,
                 }}
               >
                 {currentIndex + 1} / {images.length}
               </span>
             )}
+            {/* Fit mode toggle pill */}
+            <button
+              type="button"
+              onClick={() => {
+                setFitMode(prev => (prev === 'cover' ? 'contain' : prev === 'contain' ? 'fill' : 'cover'));
+              }}
+              style={{
+                fontSize: 11,
+                padding: '2px 8px',
+                borderRadius: 5,
+                background: fitMode === 'cover' ? '#02a9ea' : 'rgba(255,255,255,0.14)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.18)',
+                cursor: 'pointer',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                transition: 'all 0.15s ease',
+              }}
+              title="Click to toggle between Fill container (cover), Fit aspect (contain), and Stretch (fill)"
+            >
+              {fitMode === 'cover' ? 'Fill container' : fitMode === 'contain' ? 'Fit aspect' : 'Stretch fill'}
+            </button>
           </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label="Close image preview"
-            style={{
-              width: 30,
-              height: 30,
-              borderRadius: '50%',
-              background: 'rgba(255,255,255,0.15)',
-              color: '#fff',
-            }}
-          >
-            <X size={16} />
-          </Button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {/* Zoom controls */}
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                background: 'rgba(255,255,255,0.1)',
+                borderRadius: 6,
+                padding: '2px 4px',
+                border: '1px solid rgba(255,255,255,0.12)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setZoomLevel(prev => Math.max(1, +(prev - 0.25).toFixed(2)))}
+                disabled={zoomLevel <= 1}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: zoomLevel <= 1 ? 'rgba(255,255,255,0.3)' : '#fff',
+                  fontSize: 12,
+                  padding: '2px 5px',
+                  cursor: zoomLevel <= 1 ? 'default' : 'pointer',
+                  fontWeight: 700,
+                }}
+                title="Zoom out"
+              >
+                –
+              </button>
+              <span style={{ fontSize: 11, color: '#94a3b8', padding: '0 4px', minWidth: 32, textAlign: 'center' }}>
+                {Math.round(zoomLevel * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setZoomLevel(prev => Math.min(3, +(prev + 0.25).toFixed(2)))}
+                disabled={zoomLevel >= 3}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: zoomLevel >= 3 ? 'rgba(255,255,255,0.3)' : '#fff',
+                  fontSize: 12,
+                  padding: '2px 5px',
+                  cursor: zoomLevel >= 3 ? 'default' : 'pointer',
+                  fontWeight: 700,
+                }}
+                title="Zoom in"
+              >
+                +
+              </button>
+            </div>
+
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onClose}
+              aria-label="Close image preview"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                background: 'rgba(255,255,255,0.15)',
+                color: '#fff',
+              }}
+            >
+              <X size={15} />
+            </Button>
+          </div>
         </div>
 
         {/* Image viewport with 600x600 container proportions */}
@@ -239,24 +331,38 @@ export function ImageLightboxModal({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            background: 'rgba(0,0,0,0.5)',
+            background: 'rgba(0,0,0,0.6)',
             borderRadius: 8,
             overflow: 'hidden',
             minHeight: 0,
+            width: '100%',
+            height: '100%',
           }}
         >
           <img
             src={currentImg}
             alt={`Image ${currentIndex + 1}`}
             style={{
-              maxWidth: '100%',
-              maxHeight: '100%',
-              width: 'auto',
-              height: 'auto',
-              objectFit: 'contain',
+              width: '100%',
+              height: '100%',
+              objectFit: fitMode,
+              transform: `scale(${zoomLevel})`,
+              transformOrigin: 'center center',
+              transition: 'transform 0.15s ease, object-fit 0.2s ease',
               display: 'block',
-              borderRadius: 4,
+              borderRadius: 6,
+              cursor: zoomLevel > 1 ? 'grab' : 'pointer',
+              userSelect: 'none',
             }}
+            onClick={() => {
+              if (zoomLevel === 1) {
+                setFitMode(prev => (prev === 'cover' ? 'contain' : 'cover'));
+              }
+            }}
+            onDoubleClick={() => {
+              setZoomLevel(prev => (prev === 1 ? 1.75 : 1));
+            }}
+            title="Click to toggle Fill / Fit • Double click to zoom"
           />
 
           {/* Left Arrow Button */}
@@ -750,7 +856,16 @@ export function DetailModal({
               </dd>
             </div>
           )}
-          <div><dt>Type</dt><dd>{isPendingInternalReview ? <span className="text-muted-foreground">—</span> : item.type}</dd></div>
+          <div>
+            <dt>Type</dt>
+            <dd>
+              {isPendingInternalReview ? (
+                <span className="text-muted-foreground">—</span>
+              ) : (
+                <span className={`badge ${typeBadge(item.type)}`}>{item.type}</span>
+              )}
+            </dd>
+          </div>
           <div>
             <dt>Category</dt>
             <dd>
@@ -1110,6 +1225,7 @@ export function FormModal({
         />
         {savedFeatures.length > 0 && (
           <select
+            className="filter-select"
             value=""
             onChange={e => {
               if (e.target.value) {
@@ -1119,13 +1235,8 @@ export function FormModal({
             style={{
               flex: '0 0 auto',
               maxWidth: '100%',
-              cursor: 'pointer',
               fontSize: '13px',
-              padding: '8px 10px',
-              background: 'var(--secondary)',
-              borderColor: 'var(--border)',
-              color: 'var(--foreground)',
-              borderRadius: '5px',
+              height: 38,
             }}
             title="Pick a previously entered feature"
             aria-label="Pick a previously entered feature"

@@ -20,7 +20,7 @@ import { Toaster } from '@/components/ui/sonner';
 
 const links = [
   { to: '/', label: 'Overview', icon: LayoutDashboard },
-  { to: '/feedback', label: 'Feedback list', icon: ListFilter },
+  { to: '/feedback', label: 'Ticketing List', icon: ListFilter },
   { to: '/upload', label: 'Excel import', icon: Upload },
   { to: '/customers', label: 'Customers & PINs', icon: UsersRound },
   { to: '/history', label: 'Change history', icon: History },

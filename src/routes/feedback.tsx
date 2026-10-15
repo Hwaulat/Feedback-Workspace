@@ -3,11 +3,11 @@ import { createFileRoute } from '@tanstack/react-router';
 import { Plus, Search, Download, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
-import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, fmtDate, fmtDateTime, fmtReportDate } from '@/components/feedback-views';
+import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, typeBadge, fmtDate, fmtDateTime, fmtReportDate } from '@/components/feedback-views';
 import { types, activities, statuses, isOverdue, parseImages, type FeedbackItem } from '@/lib/feedback-model';
 
 export const Route = createFileRoute('/feedback')({
-  head: () => ({ meta: [{ title: 'Loop — Feedback list' }, { name: 'description', content: 'Browse, filter and update customer feedback.' }] }),
+  head: () => ({ meta: [{ title: 'Loop — Ticketing List' }, { name: 'description', content: 'Browse, filter and update customer feedback.' }] }),
   component: FeedbackPage,
 });
 
@@ -51,7 +51,7 @@ function FeedbackPage() {
     <>
       <div className="page-heading">
         <div>
-          <h1>{viewTrash ? 'Trash / Deleted feedback' : 'Feedback list'}</h1>
+          <h1>{viewTrash ? 'Trash / Deleted feedback' : 'Ticketing List'}</h1>
           <p>{viewTrash ? 'Review deleted feedback items and restore them anytime.' : (canManage ? 'Track, update and close out customer feedback.' : 'Progress and updates for your feedback.')}</p>
         </div>
         <div className="heading-actions">
@@ -246,7 +246,13 @@ function FeedbackPage() {
                         )}
                       </td>
                     )}
-                    <td>{item.needs_review ? <span className="text-muted-foreground">—</span> : item.type}</td>
+                    <td>
+                      {item.needs_review ? (
+                        <span className="text-muted-foreground">—</span>
+                      ) : (
+                        <span className={`badge ${typeBadge(item.type)}`}>{item.type}</span>
+                      )}
+                    </td>
                     <td>
                       {item.needs_review ? (
                         <span className="text-muted-foreground">—</span>
@@ -350,6 +356,7 @@ function FeedbackPage() {
                   <span className="text-xs text-muted-foreground italic">Type, Category, Status & Activity: — (Needs Update)</span>
                 ) : (
                   <>
+                    <span className={`badge ${typeBadge(item.type)}`}>{item.type}</span>
                     <span className={`badge ${statusBadge(item.status)}`}>{item.status}</span>
                     <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
                     <span className={`badge ${categoryBadge(item.category)}`}>{item.category}</span>

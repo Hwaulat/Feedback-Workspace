@@ -57,27 +57,27 @@
   ],
   "items": [
     {
-      "id": "b11a1046-59c5-44f7-b340-78845ae42a77",
+      "id": "5fe93442-2f97-4313-bcde-2a168192449e",
       "customer_id": "6de58588-dbd1-404c-82b8-8cbca6fdfad6",
       "number": 108,
-      "feature": "MPC",
-      "feedback": "kjkklj",
+      "feature": "Test Feature PIC",
+      "feedback": "Test Feedback description for PIC name verification",
       "detail": "",
       "type": "Bug Report",
       "category": "Minor",
-      "status": "Waiting",
-      "activity": "Not started",
+      "status": "Execution",
+      "activity": "Done",
       "notes": "",
       "report_date": "2026-10-15",
       "estimated_date": null,
-      "completion_date": null,
-      "needs_review": true,
+      "completion_date": "2026-10-15",
+      "needs_review": false,
       "image": null,
       "deleted_at": null,
-      "updated_at": "2026-10-15T08:28:49.628+00:00",
+      "updated_at": "2026-10-15T09:50:20.305+00:00",
       "version": 1,
-      "actor": "PT. JFE Steel Galvanizing Indonesia",
-      "pic_name": null
+      "actor": "Loop Admin",
+      "pic_name": "Loop Admin"
     },
     {
       "id": "25fa5cbb-549d-42d4-8929-b05810dfc594",
@@ -2693,6 +2693,17 @@
     }
   ],
   "history": [
+    {
+      "id": "b63b9379-5a9f-4851-a802-9cd1ea36b32b",
+      "customer_id": "6de58588-dbd1-404c-82b8-8cbca6fdfad6",
+      "item_id": "b11a1046-59c5-44f7-b340-78845ae42a77",
+      "action": "Updated feedback",
+      "field": "activity",
+      "old_value": "Not started",
+      "new_value": "Done",
+      "actor": "Loop Admin",
+      "created_at": "2026-10-15T09:50:23.384Z"
+    },
     {
       "id": "fb84ca36-50a3-4ce3-a631-5f53a009e8b6",
       "customer_id": "6de58588-dbd1-404c-82b8-8cbca6fdfad6",

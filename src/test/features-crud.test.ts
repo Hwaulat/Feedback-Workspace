@@ -19,7 +19,7 @@ import {
   type Customer,
 } from '@/lib/feedback-model';
 import { demoCustomers, demoItems, demoHistory } from '@/lib/feedback-demo';
-import { fmtDate, fmtDateTime, fmtReportDate, activityBadge, categoryBadge, statusBadge } from '@/components/feedback-views';
+import { fmtDate, fmtDateTime, fmtReportDate, activityBadge, categoryBadge, statusBadge, typeBadge } from '@/components/feedback-views';
 
 describe('Feature 1: Feedback Data Model & Validation (itemSchema)', () => {
   it('validates a valid feedback item input correctly', () => {
@@ -325,7 +325,7 @@ describe('Feature 5: UI Formatters and Badge Mappings', () => {
 describe('Feature 6: Customer POV Access Control & Route Restrictions', () => {
   const allRoutes = [
     { to: '/', label: 'Overview' },
-    { to: '/feedback', label: 'Feedback list' },
+    { to: '/feedback', label: 'Ticketing List' },
     { to: '/upload', label: 'Excel import' },
     { to: '/customers', label: 'Customers & PINs' },
     { to: '/history', label: 'Change history' },
@@ -338,11 +338,11 @@ describe('Feature 6: Customer POV Access Control & Route Restrictions', () => {
     return allRoutes;
   }
 
-  it('restricts customer navigation strictly to Overview (Dashboard) and Feedback list', () => {
+  it('restricts customer navigation strictly to Overview (Dashboard) and Ticketing List', () => {
     const customerLinks = getAllowedNavLinks('customer');
     expect(customerLinks).toHaveLength(2);
     expect(customerLinks.map(l => l.to)).toEqual(['/', '/feedback']);
-    expect(customerLinks.map(l => l.label)).toEqual(['Overview', 'Feedback list']);
+    expect(customerLinks.map(l => l.label)).toEqual(['Overview', 'Ticketing List']);
   });
 
   it('allows full navigation for admin across all 5 workspace features', () => {
@@ -1051,4 +1051,28 @@ describe('Feature 18: Auto-population and Persistence of PIC Name on Ticket Subm
     expect(getPicDisplay({ pic_name: null, actor: 'Loop Team', customer_id: 'cust-abc' })).toBeNull();
   });
 });
+
+describe('Feature 19: Solid Badges for Feedback Types', () => {
+  it('maps feedback types to their corresponding solid badge CSS classes', () => {
+    // Complaint = Blue ('type-complaint')
+    expect(typeBadge('Complaint')).toBe('type-complaint');
+    expect(typeBadge('complaint')).toBe('type-complaint');
+
+    // Change Request = Red ('type-changerequest')
+    expect(typeBadge('Change Request')).toBe('type-changerequest');
+    expect(typeBadge('change request')).toBe('type-changerequest');
+
+    // Bug Report = Orange ('type-bugreport')
+    expect(typeBadge('Bug Report')).toBe('type-bugreport');
+    expect(typeBadge('bug report')).toBe('type-bugreport');
+  });
+
+  it('handles empty, null, or unknown type gracefully without crashing', () => {
+    expect(typeBadge(null)).toBe('');
+    expect(typeBadge(undefined)).toBe('');
+    expect(typeBadge('')).toBe('');
+    expect(typeBadge('Unknown Type')).toBe('');
+  });
+});
+
 

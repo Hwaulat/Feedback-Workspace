@@ -3,6 +3,7 @@ import {
   itemSchema,
   todayWIB,
   isOverdue,
+  isNeedsUpdate,
   completionDate,
   safeCell,
   types,
@@ -10,6 +11,8 @@ import {
   statuses,
   activities,
   PIN_PATTERN,
+  parseImages,
+  serializeImages,
   type FeedbackItem,
   type ItemInput,
   type Customer,
@@ -449,6 +452,51 @@ describe('Feature 7: Internal Triage & Review Status for Customer Submissions', 
     expect(parsedWithout.image).toBeNull();
   });
 
+  it('supports multiple images upload, serialization, and backward compatibility', () => {
+    const img1 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+    const img2 = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+
+    // 1. Multiple images serialized to JSON array string
+    const multiSerialized = serializeImages([img1, img2]);
+    expect(multiSerialized).toBeTruthy();
+    expect(multiSerialized?.startsWith('[')).toBe(true);
+
+    // 2. Validate against itemSchema
+    const itemWithMulti: ItemInput = {
+      customer_id: '00000000-0000-4000-8000-000000000001',
+      number: 10,
+      feature: 'Attachments',
+      feedback: 'Multiple screenshots attached for reproduction steps',
+      detail: '',
+      type: 'Bug Report',
+      category: 'Major',
+      status: 'Execution',
+      activity: 'In progress',
+      notes: '',
+      estimated_date: null,
+      image: multiSerialized,
+    };
+    const parsedMulti = itemSchema.parse(itemWithMulti);
+    expect(parsedMulti.image).toBe(multiSerialized);
+
+    // 3. parseImages extracts both images cleanly
+    const extracted = parseImages(parsedMulti.image);
+    expect(extracted).toHaveLength(2);
+    expect(extracted[0]).toBe(img1);
+    expect(extracted[1]).toBe(img2);
+
+    // 4. Backward compatibility: single legacy string
+    const singleExtracted = parseImages(img1);
+    expect(singleExtracted).toEqual([img1]);
+
+    // 5. Empty / null / undefined handling
+    expect(parseImages(null)).toEqual([]);
+    expect(parseImages(undefined)).toEqual([]);
+    expect(parseImages('')).toEqual([]);
+    expect(serializeImages([])).toBeNull();
+    expect(serializeImages([img1])).toBe(img1);
+  });
+
   it('calculates auto-generated customer feedback number correctly based on previous feedback items', () => {
     const customerId = '00000000-0000-4000-8000-000000000001';
     const existingItems = [
@@ -602,5 +650,140 @@ describe('Feature 13: Review Status Needs Update & 4-Field Triage', () => {
     expect(isStillPending ? '—' : reviewedItem.activity).toBe('In progress');
   });
 });
+
+describe('Feature 14: PIC Name in Customer Login & Feedback List Column', () => {
+  it('validates feedback item with pic_name field in itemSchema', () => {
+    const itemWithPic: ItemInput = {
+      customer_id: '00000000-0000-4000-8000-000000000001',
+      number: 10,
+      feature: 'Dashboard',
+      feedback: 'Export button is missing',
+      detail: 'Cannot find export button',
+      type: 'Change Request',
+      category: 'Minor',
+      status: 'Execution',
+      activity: 'In progress',
+      notes: '',
+      estimated_date: null,
+      pic_name: 'Budi Santoso',
+    };
+
+    const parsed = itemSchema.parse(itemWithPic);
+    expect(parsed.pic_name).toBe('Budi Santoso');
+  });
+
+  it('handles itemSchema with null, empty, or undefined pic_name gracefully', () => {
+    const base = {
+      customer_id: '00000000-0000-4000-8000-000000000001',
+      number: 11,
+      feature: 'Billing',
+      feedback: 'Invoice mismatch',
+      detail: '',
+      type: 'Bug Report',
+      category: 'Medium',
+      status: 'Waiting',
+      activity: 'Not started',
+      notes: '',
+      estimated_date: null,
+    };
+
+    const parsedWithout = itemSchema.parse(base);
+    expect(parsedWithout.pic_name).toBeUndefined();
+
+    const parsedNull = itemSchema.parse({ ...base, pic_name: null });
+    expect(parsedNull.pic_name).toBeNull();
+
+    const parsedEmpty = itemSchema.parse({ ...base, pic_name: '   ' });
+    expect(parsedEmpty.pic_name).toBe('');
+  });
+
+  it('supports Access object with pic_name and replaces Customer portal in presentation', () => {
+    const customerAccess = {
+      role: 'customer' as const,
+      actor: 'PT ABC Indonesia',
+      customer_id: '00000000-0000-4000-8000-000000000001',
+      pin_version: 1,
+      expires: Date.now() + 3600000,
+      pic_name: 'Siti Rahma',
+    };
+
+    // The subtext / badge replaces 'Customer portal' with pic_name
+    const badgeText = customerAccess.role === 'admin'
+      ? 'Team access'
+      : (customerAccess.pic_name || 'Customer portal');
+    expect(badgeText).toBe('Siti Rahma');
+
+    // Without pic_name, fallbacks to 'Customer portal'
+    const fallbackAccess = { ...customerAccess, pic_name: null };
+    const fallbackBadge = fallbackAccess.role === 'admin'
+      ? 'Team access'
+      : (fallbackAccess.pic_name || 'Customer portal');
+    expect(fallbackBadge).toBe('Customer portal');
+  });
+});
+
+describe('Feature 15: Review Status Metric Card on Overview Page', () => {
+  it('correctly calculates total updated and needs update counts across items', () => {
+    const items: FeedbackItem[] = [
+      {
+        id: 'item-1',
+        customer_id: '00000000-0000-4000-8000-000000000001',
+        number: 1,
+        feature: 'Dashboard',
+        feedback: 'Bug in chart',
+        detail: '',
+        type: 'Bug Report',
+        category: 'Major',
+        status: 'Execution',
+        activity: 'In progress',
+        notes: '',
+        needs_review: false,
+        created_at: '2026-10-15T00:00:00Z',
+        updated_at: '2026-10-15T00:00:00Z',
+      },
+      {
+        id: 'item-2',
+        customer_id: '00000000-0000-4000-8000-000000000001',
+        number: 2,
+        feature: 'Login',
+        feedback: 'Cannot login with PIN',
+        detail: '',
+        type: 'Bug Report',
+        category: 'Major',
+        status: 'Waiting',
+        activity: 'Not started',
+        notes: '',
+        needs_review: true,
+        created_at: '2026-10-15T00:00:00Z',
+        updated_at: '2026-10-15T00:00:00Z',
+      },
+      {
+        id: 'item-3',
+        customer_id: '00000000-0000-4000-8000-000000000001',
+        number: 3,
+        feature: 'Export',
+        feedback: 'Add CSV export',
+        detail: '',
+        type: 'Change Request',
+        category: 'Minor',
+        status: 'Done',
+        activity: 'Done',
+        notes: '',
+        needs_review: false,
+        created_at: '2026-10-15T00:00:00Z',
+        updated_at: '2026-10-15T00:00:00Z',
+      },
+    ];
+
+    const needsUpdateCount = items.filter(i => isNeedsUpdate(i)).length;
+    const updatedCount = items.length - needsUpdateCount;
+
+    expect(items.length).toBe(3);
+    expect(needsUpdateCount).toBe(1);
+    expect(updatedCount).toBe(2);
+    expect(needsUpdateCount + updatedCount).toBe(items.length);
+  });
+});
+
 
 

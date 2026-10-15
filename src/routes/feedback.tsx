@@ -4,7 +4,7 @@ import { Plus, Search, Download, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
 import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, fmtDate, fmtDateTime } from '@/components/feedback-views';
-import { types, activities, statuses, isOverdue, type FeedbackItem } from '@/lib/feedback-model';
+import { types, activities, statuses, isOverdue, parseImages, type FeedbackItem } from '@/lib/feedback-model';
 
 export const Route = createFileRoute('/feedback')({
   head: () => ({ meta: [{ title: 'Loop — Feedback list' }, { name: 'description', content: 'Browse, filter and update customer feedback.' }] }),
@@ -133,6 +133,7 @@ function FeedbackPage() {
                 <tr>
                   <th style={{ width: 60, textAlign: 'center', padding: '0 8px' }}>Action</th>
                   <th style={{ width: 50, padding: '0 8px' }}>No.</th>
+                  <th style={{ minWidth: 120 }}>PIC Name</th>
                   <th>Feedback</th>
                   {canManage && <th>Customer</th>}
                   {canManage && <th>Review Status</th>}
@@ -197,11 +198,22 @@ function FeedbackPage() {
                       )}
                     </td>
                     <td style={{ width: 50, padding: '10px 8px' }}>{item.number}</td>
+                    <td style={{ minWidth: 120 }}>
+                      {item.pic_name ? (
+                        <span className="font-medium text-foreground">{item.pic_name}</span>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
                     <td>
                       <div className="feedback-title">{item.feedback}</div>
                       <div className="feedback-feature">
                         {item.feature || '—'}
-                        {item.image && <span className="inline-image-badge" title="Has attached screenshot / image">📷 Attachment</span>}
+                        {item.image && (
+                          <span className="inline-image-badge" title="Has attached screenshot / image">
+                            📷 {parseImages(item.image).length > 1 ? `${parseImages(item.image).length} Images` : 'Attachment'}
+                          </span>
+                        )}
                       </div>
                     </td>
                     {canManage && <td>{customers.find(c => c.id === item.customer_id)?.name ?? '—'}</td>}
@@ -263,7 +275,12 @@ function FeedbackPage() {
                   <h3>{item.feedback}</h3>
                   <p>
                     {item.feature || '—'} · #{item.number}
-                    {item.image && <span className="inline-image-badge" style={{ marginLeft: 6 }}>📷 Attachment</span>}
+                    {item.pic_name && <span className="inline-block ml-1 font-medium text-primary">· PIC: {item.pic_name}</span>}
+                    {item.image && (
+                      <span className="inline-image-badge" style={{ marginLeft: 6 }}>
+                        📷 {parseImages(item.image).length > 1 ? `${parseImages(item.image).length} Images` : 'Attachment'}
+                      </span>
+                    )}
                   </p>
                 </div>
                 {item.deleted_at ? (

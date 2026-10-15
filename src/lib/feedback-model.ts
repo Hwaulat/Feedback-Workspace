@@ -16,6 +16,7 @@ export const itemSchema = z.object({
   report_date: dateSchema.optional(),
   needs_review: z.boolean().optional(),
   image: z.string().nullable().optional(),
+  pic_name: z.string().trim().max(100).nullable().optional(),
 });
 export type ItemInput = z.infer<typeof itemSchema>;
 export type FeedbackItem = ItemInput & {
@@ -28,10 +29,11 @@ export type FeedbackItem = ItemInput & {
   actor: string;
   needs_review?: boolean | undefined;
   image?: string | null | undefined;
+  pic_name?: string | null | undefined;
 };
 export type Customer = { id: string; name: string; active: boolean; pin_version: number; created_at: string; pin?: string };
 export type HistoryEntry = { id: string; customer_id: string | null; item_id: string | null; action: string; field: string; old_value: string | null; new_value: string | null; actor: string; created_at: string };
-export type Access = { role: 'admin' | 'customer'; actor: string; customer_id?: string; pin_version?: number; expires: number };
+export type Access = { role: 'admin' | 'customer'; actor: string; customer_id?: string; pin_version?: number; expires: number; pic_name?: string | null };
 export function todayWIB(now = new Date()) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year:'numeric', month:'2-digit', day:'2-digit' }).format(now); }
 export function isOverdue(item: Pick<FeedbackItem,'activity'|'estimated_date'>, today = todayWIB()) { return item.activity !== 'Done' && !!item.estimated_date && item.estimated_date < today; }
 export function completionDate(activity: string, oldActivity: string, oldDate: string | null, today: string) { return activity !== 'Done' ? null : oldActivity === 'Done' ? oldDate : today; }
@@ -47,3 +49,26 @@ export const LOCKOUT_ATTEMPTS = 5;
 export const LOCKOUT_SECONDS = 15 * 60;
 export const MAX_IMPORT_BYTES = 10 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 5000;
+
+export function parseImages(image?: string | null): string[] {
+  if (!image) return [];
+  const trimmed = typeof image === 'string' ? image.trim() : '';
+  if (!trimmed) return [];
+  try {
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((x): x is string => typeof x === 'string' && Boolean(x.trim()));
+      }
+    }
+  } catch {}
+  return [trimmed];
+}
+
+export function serializeImages(images: string[]): string | null {
+  if (!images || images.length === 0) return null;
+  const filtered = images.map(i => (typeof i === 'string' ? i.trim() : '')).filter(Boolean);
+  if (filtered.length === 0) return null;
+  if (filtered.length === 1) return filtered[0]!;
+  return JSON.stringify(filtered);
+}

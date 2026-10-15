@@ -67,7 +67,7 @@ export type WorkspaceContext = {
   openLogin: () => void;
   openClearDialog: () => void;
   loginAdmin: (passcode: string, actor: string) => Promise<{ ok: boolean; error?: string }>;
-  loginCustomer: (pin: string) => Promise<{ ok: boolean; error?: string }>;
+  loginCustomer: (pin: string, picName?: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   clearAllData: () => Promise<void>;
   save: (item: ItemInput, existing?: FeedbackItem) => Promise<void>;
@@ -271,22 +271,30 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     return { ok: false, error: 'Incorrect internal team passcode. Please try again.' };
   }
 
-  async function loginCustomer(pin: string): Promise<{ ok: boolean; error?: string }> {
+  async function loginCustomer(pin: string, picName?: string): Promise<{ ok: boolean; error?: string }> {
+    const cleanPicName = (picName || '').trim();
+    if (!cleanPicName) {
+      return { ok: false, error: 'Please enter your PIC Name.' };
+    }
     if (!PIN_PATTERN.test(pin)) {
       return { ok: false, error: 'Please enter a valid 6-digit PIN.' };
     }
 
     // 1. Try server login
     try {
-      const res = await signInFn({ data: { mode: 'customer', passcode: pin, actor: '' } });
+      const res = await signInFn({ data: { mode: 'customer', passcode: pin, actor: cleanPicName, pic_name: cleanPicName } });
       if (res.ok) {
         const custAccess: Access | null = (res as any).access ?? (await getAccess());
         if (custAccess) {
-          setClientAccess(custAccess);
-          if (custAccess.customer_id) setSelectedCustomer(custAccess.customer_id);
+          const resolvedAccess: Access = {
+            ...custAccess,
+            pic_name: cleanPicName || custAccess.pic_name || null,
+          };
+          setClientAccess(resolvedAccess);
+          if (resolvedAccess.customer_id) setSelectedCustomer(resolvedAccess.customer_id);
         }
         await refresh();
-        toast.success('Welcome to your feedback portal');
+        toast.success(`Welcome back, ${cleanPicName}`);
         return { ok: true };
       }
       if (res.error) {
@@ -309,11 +317,12 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         customer_id: target.id,
         pin_version: target.pin_version,
         expires: Date.now() + 8 * 3600 * 1000,
+        pic_name: cleanPicName || null,
       };
       setClientAccess(customerAccess);
       setSelectedCustomer(target.id);
       await refresh();
-      toast.success(`Welcome, ${target.name}`);
+      toast.success(`Welcome back, ${cleanPicName || target.name}`);
       return { ok: true };
     }
 
@@ -358,6 +367,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         actor: access?.actor ?? 'Editor',
         needs_review: isCustomerActor ? true : (parsed.needs_review ?? false),
         image: parsed.image !== undefined ? parsed.image : (existing.image ?? null),
+        pic_name: parsed.pic_name !== undefined ? parsed.pic_name : (existing.pic_name ?? null),
       };
       setItems(prev => prev.map(item => (item.id === existing.id ? updatedItem : item)));
       addHistoryEntry(
@@ -381,6 +391,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         actor: access?.actor ?? (isCustomerActor ? 'Customer' : 'Editor'),
         needs_review: isCustomerActor ? true : (parsed.needs_review ?? false),
         image: parsed.image ?? null,
+        pic_name: parsed.pic_name ?? (isCustomerActor ? (access?.pic_name || null) : null),
       };
       setItems(prev => [newItem, ...prev]);
       addHistoryEntry(
@@ -770,11 +781,12 @@ function AccessDialog({
   open: boolean;
   setOpen: (v: boolean) => void;
   onAdminLogin: (passcode: string, actor: string) => Promise<{ ok: boolean; error?: string }>;
-  onCustomerLogin: (pin: string) => Promise<{ ok: boolean; error?: string }>;
+  onCustomerLogin: (pin: string, picName?: string) => Promise<{ ok: boolean; error?: string }>;
 }) {
   const [mode, setMode] = useState<'customer' | 'admin'>('admin');
   const [passcode, setPasscode] = useState('');
   const [actor, setActor] = useState('');
+  const [picName, setPicName] = useState('');
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -791,13 +803,18 @@ function AccessDialog({
           return;
         }
       } else {
-        const res = await onCustomerLogin(passcode);
+        if (!picName.trim()) {
+          setError('Please enter your PIC Name.');
+          return;
+        }
+        const res = await onCustomerLogin(passcode, picName.trim());
         if (!res.ok) {
           setError(res.error ?? 'Invalid 6-digit PIN.');
           return;
         }
       }
       setPasscode('');
+      setPicName('');
       setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Please try again.');
@@ -819,6 +836,7 @@ function AccessDialog({
             onClick={() => {
               setMode('admin');
               setPasscode('');
+              setPicName('');
               setError('');
             }}
           >
@@ -831,6 +849,7 @@ function AccessDialog({
             onClick={() => {
               setMode('customer');
               setPasscode('');
+              setPicName('');
               setError('');
             }}
           >
@@ -839,9 +858,23 @@ function AccessDialog({
         </div>
         <form onSubmit={submit}>
           {mode === 'customer' && (
-            <p className="login-copy">
-              Enter your 6-digit customer PIN to view your feedback progress.
-            </p>
+            <>
+              <p className="login-copy">
+                Enter your PIC Name and 6-digit customer PIN to view your feedback progress.
+              </p>
+              <label className="form-field mb-4">
+                PIC Name
+                <input
+                  required
+                  maxLength={100}
+                  value={picName}
+                  onChange={e => setPicName(e.target.value)}
+                  placeholder="e.g. Budi Santoso"
+                  autoComplete="name"
+                  autoFocus
+                />
+              </label>
+            </>
           )}
           {mode === 'admin' && (
             <label className="form-field mb-4">
@@ -882,7 +915,7 @@ function AccessDialog({
               onChange={e => setPasscode(mode === 'customer' ? e.target.value.replace(/\D/g, '') : e.target.value)}
               placeholder={mode === 'customer' ? '6-digit PIN' : 'Enter team passcode'}
               autoComplete="current-password"
-              autoFocus
+              autoFocus={mode === 'admin'}
             />
           </label>
           {error && (

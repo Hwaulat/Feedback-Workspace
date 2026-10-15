@@ -2,8 +2,8 @@ import { useMemo, useState, useEffect, useRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useWorkspace } from './feedback-provider';
 import { Button } from '@/components/ui/button';
-import { X, Trash2, RotateCcw, ShieldCheck, Image as ImageIcon, Pencil } from 'lucide-react';
-import { types, categories, statuses, activities, todayWIB, type Customer, type FeedbackItem, type ItemInput } from '@/lib/feedback-model';
+import { X, Trash2, RotateCcw, ShieldCheck, Image as ImageIcon, Pencil, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { types, categories, statuses, activities, todayWIB, parseImages, serializeImages, type Customer, type FeedbackItem, type ItemInput } from '@/lib/feedback-model';
 
 export const activityBadge = (a: string) => (a === 'Done' ? 'done' : a === 'In progress' ? 'progress' : 'pending');
 export const categoryBadge = (c: string) => (c === 'Major' ? 'major' : c === 'Medium' ? 'medium' : '');
@@ -41,7 +41,7 @@ export function TeamOnly({ children }: { children: ReactNode }) {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
           <ShieldCheck size={36} className="text-muted-foreground" />
         </div>
-        <p className="font-medium text-base mb-1">Restricted Access for Customer Portal</p>
+        <p className="font-medium text-base mb-1">Restricted Access for {access.pic_name || 'Customer Portal'}</p>
         <p className="text-muted-foreground text-sm mb-4">
           As a customer account, you can only access the <strong>Dashboard (Overview)</strong> and <strong>Feedback list</strong>.
         </p>
@@ -103,6 +103,244 @@ export function processImageFile(file: File): Promise<string> {
   });
 }
 
+export function ImageLightboxModal({
+  images,
+  initialIndex = 0,
+  onClose,
+}: {
+  images: string[];
+  initialIndex?: number;
+  onClose: () => void;
+}) {
+  const [currentIndex, setCurrentIndex] = useState(initialIndex);
+
+  useEffect(() => {
+    setCurrentIndex(initialIndex);
+  }, [initialIndex]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+      if (e.key === 'ArrowLeft' && images.length > 1) {
+        setCurrentIndex(prev => (prev > 0 ? prev - 1 : images.length - 1));
+      }
+      if (e.key === 'ArrowRight' && images.length > 1) {
+        setCurrentIndex(prev => (prev < images.length - 1 ? prev + 1 : 0));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [images.length, onClose]);
+
+  if (!images || images.length === 0) return null;
+  const currentImg = images[currentIndex] || images[0];
+
+  return (
+    <div className="image-lightbox-overlay" onClick={onClose} role="dialog" aria-modal="true">
+      <div
+        className="image-lightbox-content"
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: 600,
+          height: 600,
+          maxWidth: 'min(600px, 94vw)',
+          maxHeight: 'min(600px, 92vh)',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative',
+          background: '#090d16',
+          borderRadius: 12,
+          padding: 12,
+          boxShadow: '0 25px 60px rgba(0,0,0,0.85)',
+          border: '1px solid rgba(255, 255, 255, 0.15)',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Top Header */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: 8,
+            color: '#fff',
+            zIndex: 10,
+            flexShrink: 0,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: '#e2e8f0' }}>
+              Image preview (600 × 600)
+            </span>
+            {images.length > 1 && (
+              <span
+                style={{
+                  fontSize: 12,
+                  padding: '2px 8px',
+                  borderRadius: 10,
+                  background: 'rgba(255,255,255,0.15)',
+                  color: '#93c5fd',
+                }}
+              >
+                {currentIndex + 1} / {images.length}
+              </span>
+            )}
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onClose}
+            aria-label="Close image preview"
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: '50%',
+              background: 'rgba(255,255,255,0.15)',
+              color: '#fff',
+            }}
+          >
+            <X size={16} />
+          </Button>
+        </div>
+
+        {/* Image viewport with 600x600 container proportions */}
+        <div
+          style={{
+            flex: 1,
+            position: 'relative',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.5)',
+            borderRadius: 8,
+            overflow: 'hidden',
+            minHeight: 0,
+          }}
+        >
+          <img
+            src={currentImg}
+            alt={`Image ${currentIndex + 1}`}
+            style={{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              width: 'auto',
+              height: 'auto',
+              objectFit: 'contain',
+              display: 'block',
+              borderRadius: 4,
+            }}
+          />
+
+          {/* Left Arrow Button */}
+          {images.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setCurrentIndex(prev => (prev > 0 ? prev - 1 : images.length - 1))}
+              style={{
+                position: 'absolute',
+                left: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.65)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.2)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 0.15s ease',
+                zIndex: 10,
+              }}
+              title="Previous image (Left arrow)"
+              aria-label="Previous image"
+            >
+              <ChevronLeft size={20} />
+            </button>
+          )}
+
+          {/* Right Arrow Button */}
+          {images.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setCurrentIndex(prev => (prev < images.length - 1 ? prev + 1 : 0))}
+              style={{
+                position: 'absolute',
+                right: 10,
+                top: '50%',
+                transform: 'translateY(-50%)',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                background: 'rgba(0,0,0,0.65)',
+                color: '#fff',
+                border: '1px solid rgba(255,255,255,0.2)',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'background 0.15s ease',
+                zIndex: 10,
+              }}
+              title="Next image (Right arrow)"
+              aria-label="Next image"
+            >
+              <ChevronRight size={20} />
+            </button>
+          )}
+        </div>
+
+        {/* Bottom thumbnail strip if multiple images */}
+        {images.length > 1 && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              marginTop: 10,
+              paddingTop: 2,
+              overflowX: 'auto',
+              flexShrink: 0,
+            }}
+          >
+            {images.map((img, idx) => (
+              <button
+                type="button"
+                key={idx}
+                onClick={() => setCurrentIndex(idx)}
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 6,
+                  padding: 2,
+                  border: idx === currentIndex ? '2px solid #02a9ea' : '1px solid rgba(255,255,255,0.2)',
+                  background: 'rgba(0,0,0,0.5)',
+                  cursor: 'pointer',
+                  opacity: idx === currentIndex ? 1 : 0.6,
+                  transition: 'all 0.15s ease',
+                  flexShrink: 0,
+                  overflow: 'hidden',
+                }}
+                title={`Switch to image #${idx + 1}`}
+              >
+                <img
+                  src={img}
+                  alt={`Thumb ${idx + 1}`}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 4 }}
+                />
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ImageUploader({
   value,
   onChange,
@@ -112,19 +350,42 @@ export function ImageUploader({
   onChange: (url: string | null) => void;
   disabled?: boolean;
 }) {
+  const images = useMemo(() => parseImages(value), [value]);
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [zoom, setZoom] = useState(false);
+  const [zoomIndex, setZoomIndex] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleFile = async (file: File) => {
+  const addFiles = async (files: FileList | File[]) => {
     setError(null);
-    try {
-      const dataUrl = await processImageFile(file);
-      onChange(dataUrl);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to process image.');
+    const fileArr = Array.from(files);
+    const validFiles = fileArr.filter(
+      f => f.type.startsWith('image/') || /\.(png|jpe?g)$/i.test(f.name)
+    );
+    if (validFiles.length === 0) {
+      setError('Only PNG and JPG/JPEG images are supported.');
+      return;
     }
+    if (images.length + validFiles.length > 10) {
+      setError('You can upload a maximum of 10 images per feedback item.');
+      return;
+    }
+    try {
+      const processed = await Promise.all(validFiles.map(processImageFile));
+      const nextImages = [...images, ...processed];
+      onChange(serializeImages(nextImages));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to process images.');
+    }
+  };
+
+  const removeImage = (idxToRemove: number) => {
+    const nextImages = images.filter((_, idx) => idx !== idxToRemove);
+    onChange(serializeImages(nextImages));
+  };
+
+  const clearAll = () => {
+    onChange(null);
   };
 
   useEffect(() => {
@@ -132,108 +393,245 @@ export function ImageUploader({
       if (disabled) return;
       const items = e.clipboardData?.items;
       if (!items) return;
+      const pastedFiles: File[] = [];
       for (let i = 0; i < items.length; i++) {
         const item = items[i];
         if (item && item.type.startsWith('image/')) {
           const file = item.getAsFile();
-          if (file) {
-            e.preventDefault();
-            handleFile(file);
-            break;
-          }
+          if (file) pastedFiles.push(file);
         }
+      }
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        addFiles(pastedFiles);
       }
     };
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [disabled]);
+  }, [disabled, images]);
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     if (disabled) return;
-    const file = e.dataTransfer.files?.[0];
-    if (file) handleFile(file);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      addFiles(files);
+    }
   };
 
   return (
     <div className="image-uploader-wrap">
-      {value ? (
-        <div className="image-preview-card">
-          <img
-            src={value}
-            alt="Preview thumbnail"
-            className="image-thumb"
-            onClick={() => setZoom(true)}
-            title="Click to view full preview"
-          />
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontWeight: 500, fontSize: 14 }}>Image attached</span>
-              <span className="badge" style={{ fontSize: 12, padding: '1px 6px' }}>Ready</span>
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/png,image/jpeg,image/jpg"
+        multiple
+        style={{ display: 'none' }}
+        onChange={e => {
+          if (e.target.files && e.target.files.length > 0) {
+            addFiles(e.target.files);
+          }
+          e.target.value = '';
+        }}
+      />
+
+      {images.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Grid of uploaded images */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: 10 }}>
+            {images.map((imgUrl, idx) => (
+              <div
+                key={idx}
+                className="image-card-item"
+                style={{
+                  position: 'relative',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: 6,
+                  background: 'var(--surface-subtle)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                }}
+              >
+                <div
+                  style={{
+                    position: 'relative',
+                    width: '100%',
+                    height: 84,
+                    borderRadius: 6,
+                    overflow: 'hidden',
+                    cursor: 'pointer',
+                    background: '#090d16',
+                  }}
+                  onClick={() => setZoomIndex(idx)}
+                  title="Click to view in 600×600 popup"
+                >
+                  <img
+                    src={imgUrl}
+                    alt={`Preview #${idx + 1}`}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      display: 'block',
+                      transition: 'opacity 0.15s ease',
+                    }}
+                  />
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'rgba(0,0,0,0.4)',
+                      opacity: 0,
+                      transition: 'opacity 0.15s ease',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#fff',
+                      fontSize: 12,
+                      fontWeight: 500,
+                    }}
+                    className="thumb-hover-overlay"
+                  >
+                    🔍 600×600
+                  </div>
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 4,
+                      left: 4,
+                      fontSize: 11,
+                      fontWeight: 600,
+                      padding: '1px 6px',
+                      borderRadius: 4,
+                      background: 'rgba(0,0,0,0.7)',
+                      color: '#fff',
+                    }}
+                  >
+                    #{idx + 1}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <button
+                    type="button"
+                    onClick={() => setZoomIndex(idx)}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#02a9ea',
+                      fontSize: 12,
+                      padding: 0,
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    Zoom 600px
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removeImage(idx)}
+                    disabled={disabled}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: 'var(--danger)',
+                      padding: 2,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                    }}
+                    title={`Delete image #${idx + 1}`}
+                    aria-label={`Delete image #${idx + 1}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* + Add more image button card if < 10 images */}
+            {images.length < 10 && (
+              <div
+                onClick={() => !disabled && fileInputRef.current?.click()}
+                style={{
+                  border: '1.5px dashed var(--border)',
+                  borderRadius: 8,
+                  padding: 10,
+                  minHeight: 114,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: disabled ? 'not-allowed' : 'pointer',
+                  background: 'var(--secondary)',
+                  gap: 4,
+                  transition: 'all 0.15s ease',
+                }}
+                onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = '#02a9ea'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'; }}
+                title="Add more images"
+              >
+                <div
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: '50%',
+                    background: 'rgba(2, 169, 234, 0.12)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#02a9ea',
+                  }}
+                >
+                  <Plus size={18} />
+                </div>
+                <span style={{ fontSize: 13, fontWeight: 500 }}>Add image</span>
+                <span style={{ fontSize: 11, color: 'var(--muted-foreground)' }}>PNG, JPG</span>
+              </div>
+            )}
+          </div>
+
+          {/* Action bar below thumbnails */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted-foreground)' }}>
+            <span>{images.length} image{images.length > 1 ? 's' : ''} attached • Click thumbnail to view in 600×600 popup</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={disabled || images.length >= 10}
+                style={{ height: 26, fontSize: 12, padding: '0 8px' }}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Plus size={12} className="mr-1" /> Add more
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={disabled}
+                style={{ height: 26, fontSize: 12, padding: '0 8px', color: 'var(--danger)' }}
+                onClick={clearAll}
+              >
+                Clear all
+              </Button>
             </div>
-            <p style={{ margin: '2px 0 0', fontSize: 13, color: 'var(--muted-foreground)' }}>
-              Click thumbnail to zoom • Drag or paste to replace
-            </p>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={disabled}
-              style={{ height: 30, fontSize: 13, padding: '0 10px' }}
-              onClick={() => fileInputRef.current?.click()}
-            >
-              Replace
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              disabled={disabled}
-              style={{ height: 28, width: 28, color: 'var(--danger)' }}
-              onClick={() => onChange(null)}
-              title="Remove image"
-            >
-              <Trash2 size={14} />
-            </Button>
-          </div>
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept="image/png,image/jpeg,image/jpg"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
-              e.target.value = '';
-            }}
-          />
         </div>
       ) : (
         <div
           className={`image-dropzone ${isDragging ? 'dragging' : ''}`}
           onClick={() => !disabled && fileInputRef.current?.click()}
-          onDragOver={(e) => { e.preventDefault(); if (!disabled) setIsDragging(true); }}
-          onDragEnter={(e) => { e.preventDefault(); if (!disabled) setIsDragging(true); }}
-          onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+          onDragOver={e => { e.preventDefault(); if (!disabled) setIsDragging(true); }}
+          onDragEnter={e => { e.preventDefault(); if (!disabled) setIsDragging(true); }}
+          onDragLeave={e => { e.preventDefault(); setIsDragging(false); }}
           onDrop={handleDrop}
           role="button"
           tabIndex={0}
-          aria-label="Upload screenshot or image"
+          aria-label="Upload screenshots or images"
         >
-          <input
-            type="file"
-            ref={fileInputRef}
-            accept="image/png,image/jpeg,image/jpg"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
-              e.target.value = '';
-            }}
-          />
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
             <div
               style={{
@@ -255,29 +653,20 @@ export function ImageUploader({
               <span style={{ color: 'var(--muted-foreground)', fontSize: 14 }}> or drag & drop</span>
             </div>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--muted-foreground)' }}>
-              PNG or JPG • Paste anytime with <kbd style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid var(--border)', background: 'var(--background)', fontSize: 12 }}>Ctrl+V</kbd>
+              Upload multiple PNG or JPG • Paste anytime with <kbd style={{ padding: '1px 5px', borderRadius: 3, border: '1px solid var(--border)', background: 'var(--background)', fontSize: 12 }}>Ctrl+V</kbd>
             </p>
           </div>
         </div>
       )}
+
       {error && <p className="error-text" style={{ margin: '6px 0 0', fontSize: 13 }}>{error}</p>}
 
-      {zoom && value && (
-        <div className="image-lightbox-overlay" onClick={() => setZoom(false)}>
-          <div className="image-lightbox-content" onClick={(e) => e.stopPropagation()}>
-            <img src={value} alt="Attachment full preview" className="image-lightbox-img" />
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              className="image-lightbox-close"
-              onClick={() => setZoom(false)}
-              aria-label="Close zoom"
-            >
-              <X size={16} />
-            </Button>
-          </div>
-        </div>
+      {zoomIndex !== null && images.length > 0 && (
+        <ImageLightboxModal
+          images={images}
+          initialIndex={zoomIndex}
+          onClose={() => setZoomIndex(null)}
+        />
       )}
     </div>
   );
@@ -300,6 +689,8 @@ export function DetailModal({
 }) {
   const { access } = useWorkspace();
   const [zoomImage, setZoomImage] = useState(false);
+  const [detailZoomIndex, setDetailZoomIndex] = useState(0);
+  const detailImages = useMemo(() => parseImages(item.image), [item.image]);
   const customer = customers.find(c => c.id === item.customer_id);
   const showReview = access?.role !== 'customer';
   const isPendingInternalReview = Boolean(item.needs_review);
@@ -319,6 +710,7 @@ export function DetailModal({
         </div>
         <dl className="detail-grid">
           <div><dt>Customer</dt><dd>{customer?.name ?? '—'}</dd></div>
+          <div><dt>PIC Name</dt><dd>{item.pic_name || '—'}</dd></div>
           <div><dt>Feature</dt><dd>{item.feature || '—'}</dd></div>
           <div><dt>Report date</dt><dd>{fmtDate(item.report_date ?? item.updated_at.slice(0, 10))}</dd></div>
           {showReview && (
@@ -371,42 +763,77 @@ export function DetailModal({
           )}
           <div className="full"><dt>Feedback</dt><dd>{item.feedback}</dd></div>
           {item.detail && <div className="full"><dt>Detail information</dt><dd>{item.detail}</dd></div>}
-          {item.image && (
+          {detailImages.length > 0 && (
             <div className="full">
-              <dt>Attached screenshot</dt>
+              <dt>Attached screenshot{detailImages.length > 1 ? `s (${detailImages.length})` : ''}</dt>
               <dd>
-                <div style={{ marginTop: 4, display: 'inline-block' }}>
-                  <img
-                    src={item.image}
-                    alt="Feedback screenshot attachment"
-                    style={{
-                      maxHeight: 180,
-                      maxWidth: '100%',
-                      borderRadius: 6,
-                      border: '1px solid var(--border)',
-                      cursor: 'pointer',
-                      display: 'block',
-                    }}
-                    onClick={() => setZoomImage(true)}
-                    title="Click to view full image"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setZoomImage(true)}
-                    style={{
-                      marginTop: 6,
-                      background: 'none',
-                      border: 'none',
-                      color: '#02a9ea',
-                      fontSize: 14,
-                      cursor: 'pointer',
-                      padding: 0,
-                      textDecoration: 'underline',
-                    }}
-                  >
-                    View full image
-                  </button>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 6 }}>
+                  {detailImages.map((img, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        position: 'relative',
+                        borderRadius: 8,
+                        border: '1px solid var(--border)',
+                        padding: 4,
+                        background: 'var(--surface-subtle)',
+                        cursor: 'pointer',
+                        transition: 'transform 0.15s ease',
+                      }}
+                      onClick={() => {
+                        setDetailZoomIndex(idx);
+                        setZoomImage(true);
+                      }}
+                      title={`Click to view image #${idx + 1} in 600×600 popup`}
+                    >
+                      <img
+                        src={img}
+                        alt={`Attachment ${idx + 1}`}
+                        style={{
+                          width: 110,
+                          height: 85,
+                          objectFit: 'cover',
+                          borderRadius: 6,
+                          display: 'block',
+                        }}
+                      />
+                      <span
+                        style={{
+                          position: 'absolute',
+                          bottom: 6,
+                          right: 6,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          background: 'rgba(0,0,0,0.7)',
+                          color: '#fff',
+                        }}
+                      >
+                        #{idx + 1}
+                      </span>
+                    </div>
+                  ))}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDetailZoomIndex(0);
+                    setZoomImage(true);
+                  }}
+                  style={{
+                    marginTop: 8,
+                    background: 'none',
+                    border: 'none',
+                    color: '#02a9ea',
+                    fontSize: 13,
+                    cursor: 'pointer',
+                    padding: 0,
+                    textDecoration: 'underline',
+                  }}
+                >
+                  View full image (600×600 pop-up)
+                </button>
               </dd>
             </div>
           )}
@@ -439,22 +866,12 @@ export function DetailModal({
           <Button variant="outline" onClick={onClose}>Close</Button>
         </div>
       </div>
-      {zoomImage && item.image && (
-        <div className="image-lightbox-overlay" onClick={() => setZoomImage(false)}>
-          <div className="image-lightbox-content" onClick={e => e.stopPropagation()}>
-            <img src={item.image} alt="Attachment full preview" className="image-lightbox-img" />
-            <Button
-              type="button"
-              variant="secondary"
-              size="icon"
-              className="image-lightbox-close"
-              onClick={() => setZoomImage(false)}
-              aria-label="Close zoom"
-            >
-              <X size={16} />
-            </Button>
-          </div>
-        </div>
+      {zoomImage && detailImages.length > 0 && (
+        <ImageLightboxModal
+          images={detailImages}
+          initialIndex={detailZoomIndex}
+          onClose={() => setZoomImage(false)}
+        />
       )}
     </div>
   );
@@ -551,6 +968,7 @@ export function FormModal({
         estimated_date: item.estimated_date,
         needs_review: !isCustomer && item.needs_review ? false : (item.needs_review ?? false),
         image: item.image ?? null,
+        pic_name: item.pic_name ?? (isCustomer ? (access?.pic_name || null) : null),
       }
     : {
         customer_id: defaultCustId,
@@ -567,6 +985,7 @@ export function FormModal({
         estimated_date: null,
         needs_review: isCustomer,
         image: null,
+        pic_name: isCustomer ? (access?.pic_name || null) : null,
       });
 
   const [error, setError] = useState('');
@@ -622,6 +1041,7 @@ export function FormModal({
         feedback: form.feedback.trim(),
         detail: form.detail.trim(),
         image: form.image || null,
+        pic_name: form.pic_name?.trim() || (isCustomer ? (access?.pic_name || null) : null),
         type: isCustomer ? (item ? form.type : 'Bug Report') : form.type,
         category: isCustomer ? (item ? form.category : 'Minor') : form.category,
         status: isCustomer ? (item ? form.status : 'Waiting') : form.status,
@@ -773,6 +1193,20 @@ export function FormModal({
                   </span>
                 </label>
                 <label className="form-field">
+                  PIC Name
+                  <input
+                    type="text"
+                    maxLength={100}
+                    value={form.pic_name || ''}
+                    onChange={set('pic_name')}
+                    placeholder="PIC name"
+                    title="Person in charge submitting this feedback"
+                  />
+                  <span className="text-[13px] text-muted-foreground mt-0.5">
+                    Person in charge submitting this feedback
+                  </span>
+                </label>
+                <label className="form-field">
                   Report Date
                   <input
                     type="date"
@@ -841,6 +1275,16 @@ export function FormModal({
                   </label>
                 )}
                 <label className="form-field">No.<input type="number" min={1} required value={form.number} onChange={e => setForm(f => ({ ...f, number: Number(e.target.value) }))} /></label>
+                <label className="form-field">PIC Name
+                  <input
+                    type="text"
+                    maxLength={100}
+                    value={form.pic_name ?? ''}
+                    onChange={set('pic_name')}
+                    placeholder="e.g. Budi Santoso"
+                    title="Person in charge name"
+                  />
+                </label>
                 <label className="form-field">Report date
                   <input
                     type="date"

@@ -40,6 +40,7 @@ export const signIn = createServerFn({ method: 'POST' })
         mode: z.enum(['admin', 'customer']),
         passcode: z.string().min(1).max(200),
         actor: z.string().trim().max(100),
+        pic_name: z.string().trim().max(100).optional(),
       })
       .parse(v),
   )
@@ -108,6 +109,7 @@ export const signIn = createServerFn({ method: 'POST' })
           customer_id: cust.id,
           pin_version: cust.pin_version,
           expires: Date.now() + SESSION_SECONDS * 1000,
+          pic_name: data.pic_name || (data.actor && data.actor !== cust.name ? data.actor : null),
         };
       }
     }
@@ -186,6 +188,12 @@ export const getWorkspace = createServerFn({ method: 'GET' }).handler(
 
           if (!cq.error && !iq.error) {
             const rawItems = (iq.data ?? []) as any[];
+            let localItemMap = new Map<string, FeedbackItem>();
+            try {
+              const localStore = await readServerStore();
+              localItemMap = new Map(localStore.items.map(i => [i.id, i]));
+            } catch {}
+
             const mappedItems: FeedbackItem[] = rawItems.map(item => ({
               ...item,
               activity: (item.activity === 'Pending' ? 'Not started' : item.activity) as any,
@@ -194,6 +202,7 @@ export const getWorkspace = createServerFn({ method: 'GET' }).handler(
               notes: item.notes ?? '',
               detail: item.detail ?? '',
               feature: item.feature ?? '',
+              pic_name: (item as any).pic_name ?? localItemMap.get(item.id)?.pic_name ?? null,
             }));
 
             const customers: Customer[] = (cq.data ?? []) as any[];
@@ -238,7 +247,7 @@ export const saveItem = createServerFn({ method: 'POST' })
     const isCustomerActor = access.role === 'customer';
     const resolvedNeedsReview = isCustomerActor ? true : (data.item.needs_review ?? false);
     const resolvedImage = data.item.image !== undefined ? data.item.image : null;
-    const { needs_review: _nr, image: _img, ...dbItem } = data.item;
+    const { needs_review: _nr, image: _img, pic_name: _pic, ...dbItem } = data.item;
     const targetCustomerId = isCustomerActor ? access.customer_id! : data.item.customer_id;
 
     // 1. Primary: Save to Supabase Cloud
@@ -272,6 +281,7 @@ export const saveItem = createServerFn({ method: 'POST' })
               activity: (updated.activity === 'Pending' ? 'Not started' : updated.activity) as any,
               needs_review: updated.needs_review ?? false,
               image: updated.image ?? null,
+              pic_name: data.item.pic_name ?? null,
             };
           }
         } else {
@@ -327,6 +337,7 @@ export const saveItem = createServerFn({ method: 'POST' })
                 activity: (inserted.activity === 'Pending' ? 'Not started' : inserted.activity) as any,
                 needs_review: inserted.needs_review ?? false,
                 image: inserted.image ?? null,
+                pic_name: data.item.pic_name ?? null,
               };
               lastInsertError = null;
               break;

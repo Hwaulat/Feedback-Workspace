@@ -116,6 +116,7 @@ export async function saveServerItem(
       actor,
       needs_review: isCustomer ? true : (item.needs_review ?? false),
       image: item.image !== undefined ? item.image : (current.image ?? null),
+      pic_name: item.pic_name !== undefined ? item.pic_name : (current.pic_name ?? null),
     };
     store.items[idx] = updated;
 
@@ -159,6 +160,7 @@ export async function saveServerItem(
     actor,
     needs_review: isCustomer ? true : (item.needs_review ?? false),
     image: item.image ?? null,
+    pic_name: item.pic_name ?? null,
   };
 
   store.items.unshift(newItem);

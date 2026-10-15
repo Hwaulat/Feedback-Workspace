@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Inbox, CheckCircle2, LoaderCircle, Hourglass, GitPullRequest, ArrowRight, Download, X } from 'lucide-react';
+import { Inbox, CheckCircle2, LoaderCircle, Hourglass, GitPullRequest, ArrowRight, Download, X, ClipboardCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
 import { DetailModal, activityBadge, categoryBadge, statusBadge, fmtDate } from '@/components/feedback-views';
-import { categories, activities, isOverdue, type FeedbackItem } from '@/lib/feedback-model';
+import { categories, activities, isOverdue, isNeedsUpdate, type FeedbackItem } from '@/lib/feedback-model';
 
 export const Route = createFileRoute('/')({
   head: () => ({ meta: [{ title: 'Loop — Overview' }, { name: 'description', content: 'Live overview of customer feedback, progress and change requests.' }] }),
@@ -14,7 +14,7 @@ export const Route = createFileRoute('/')({
 function Overview() {
   const { access, demo, customers, items, selectedCustomer, setSelectedCustomer, exportToExcel } = useWorkspace();
   const [detail, setDetail] = useState<FeedbackItem | null>(null);
-  const [popupCategory, setPopupCategory] = useState<'done' | 'inprogress' | 'notstarted' | 'changerequest' | 'overdue' | null>(null);
+  const [popupCategory, setPopupCategory] = useState<'done' | 'inprogress' | 'notstarted' | 'changerequest' | 'overdue' | 'review_status' | 'needs_update' | 'updated' | null>(null);
   const [recentTypeTab, setRecentTypeTab] = useState<'all' | 'Complaint' | 'Change Request' | 'Bug Report'>('all');
   const [recentCategory, setRecentCategory] = useState<string>('all');
   const [recentActivity, setRecentActivity] = useState<string>('all');
@@ -26,6 +26,8 @@ function Overview() {
   const changeRequests = active.filter(i => i.type === 'Change Request').length;
   const overdue = active.filter(i => isOverdue(i)).length;
   const total = active.length;
+  const needsUpdateCount = active.filter(i => isNeedsUpdate(i, customers)).length;
+  const updatedCount = active.length - needsUpdateCount;
 
   const filteredRecent = useMemo(() => {
     return [...active]
@@ -100,8 +102,33 @@ function Overview() {
         items: active.filter(i => isOverdue(i)),
       };
     }
+    if (popupCategory === 'review_status') {
+      return {
+        title: 'Review Status Breakdown',
+        subtitle: `Total ${total} feedback: ${updatedCount} Updated · ${needsUpdateCount} Needs Update`,
+        items: [...active].sort((a, b) => {
+          const aNeeds = isNeedsUpdate(a, customers) ? 0 : 1;
+          const bNeeds = isNeedsUpdate(b, customers) ? 0 : 1;
+          return aNeeds - bNeeds;
+        }),
+      };
+    }
+    if (popupCategory === 'needs_update') {
+      return {
+        title: 'Needs Update Feedback',
+        subtitle: `${needsUpdateCount} feedback items pending review & triage`,
+        items: active.filter(i => isNeedsUpdate(i, customers)),
+      };
+    }
+    if (popupCategory === 'updated') {
+      return {
+        title: 'Updated Feedback',
+        subtitle: `${updatedCount} feedback items reviewed and updated`,
+        items: active.filter(i => !isNeedsUpdate(i, customers)),
+      };
+    }
     return null;
-  }, [popupCategory, active]);
+  }, [popupCategory, active, updatedCount, needsUpdateCount, total, customers]);
 
   return (
     <>
@@ -159,6 +186,48 @@ function Overview() {
           <div className="metric-value">{total}</div>
           <div className="metric-foot">
             <span>{access?.role === 'customer' ? 'Your active feedback' : `Across ${customers.length} customers`}</span>
+          </div>
+        </div>
+
+        <div className="metric">
+          <div className="metric-top">
+            <span>Review Status</span>
+            <span className="metric-icon warning"><ClipboardCheck /></span>
+          </div>
+          <div className="metric-review-breakdown">
+            <div className="review-stat-row">
+              <button
+                type="button"
+                className="review-stat-pill updated"
+                onClick={() => setPopupCategory('updated')}
+                title={`${updatedCount} items Updated — click to view list`}
+              >
+                <span className="badge-dot" style={{ backgroundColor: '#10b981' }} />
+                <span className="review-stat-label">Updated:</span>
+                <strong className="review-stat-num">{updatedCount}</strong>
+              </button>
+              <button
+                type="button"
+                className="review-stat-pill needs-update"
+                onClick={() => setPopupCategory('needs_update')}
+                title={`${needsUpdateCount} items Needs Update — click to view list`}
+              >
+                <span className="badge-dot" style={{ backgroundColor: '#ea580c' }} />
+                <span className="review-stat-label">Needs Update:</span>
+                <strong className="review-stat-num">{needsUpdateCount}</strong>
+              </button>
+            </div>
+          </div>
+          <div className="metric-foot">
+            <span>{needsUpdateCount > 0 ? `${needsUpdateCount} pending review` : 'All items updated'}</span>
+            <button
+              type="button"
+              className="metric-tertiary-btn"
+              onClick={() => setPopupCategory('review_status')}
+              aria-label="View Review Status feedback details"
+            >
+              Details &rarr;
+            </button>
           </div>
         </div>
 
@@ -553,9 +622,10 @@ function Overview() {
                       <thead>
                         <tr>
                           <th>No.</th>
+                          <th>PIC Name</th>
                           <th>Feedback</th>
                           {access?.role !== 'customer' && <th>Customer</th>}
-                          {access?.role !== 'customer' && <th>Review Status</th>}
+                          {(access?.role !== 'customer' || popupCategory === 'review_status' || popupCategory === 'needs_update' || popupCategory === 'updated') && <th>Review Status</th>}
                           <th>Type</th>
                           <th>Category</th>
                           <th>Status</th>
@@ -575,6 +645,7 @@ function Overview() {
                             }}
                           >
                             <td>{item.number}</td>
+                            <td>{item.pic_name ? <span className="font-medium">{item.pic_name}</span> : <span className="text-muted-foreground">—</span>}</td>
                             <td>
                               <div className="feedback-title">{item.feedback}</div>
                               <div className="feedback-feature">{item.feature || '—'}</div>
@@ -582,7 +653,7 @@ function Overview() {
                             {access?.role !== 'customer' && (
                               <td>{customers.find(c => c.id === item.customer_id)?.name ?? '—'}</td>
                             )}
-                            {access?.role !== 'customer' && (
+                            {(access?.role !== 'customer' || popupCategory === 'review_status' || popupCategory === 'needs_update' || popupCategory === 'updated') && (
                               <td>
                                 {item.needs_review ? (
                                   <span

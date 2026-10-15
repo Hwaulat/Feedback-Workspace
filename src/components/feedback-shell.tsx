@@ -115,14 +115,16 @@ function Shell() {
           </div>
           <div className="sidebar-profile">
             <span className="avatar">
-              {access?.actor
+              {access?.role === 'customer' && access?.pic_name
+                ? access.pic_name.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
+                : access?.actor
                 ? access.actor.split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase()
                 : 'LT'}
             </span>
             <div className="profile-copy flex-1 min-w-0">
               <strong className="font-medium truncate block">{access?.actor ?? 'Loop team'}</strong>
-              <p className="text-muted-foreground text-[12px] mt-0.5">
-                {demo ? 'Real workspace' : access?.role === 'admin' ? 'Internal team' : 'Customer portal'}
+              <p className="text-muted-foreground text-[12px] mt-0.5 truncate" title={access?.pic_name || 'Customer portal'}>
+                {demo ? 'Real workspace' : access?.role === 'admin' ? 'Internal team' : (access?.pic_name || 'Customer portal')}
               </p>
             </div>
             <div className="flex items-center gap-1">
@@ -161,13 +163,13 @@ function Shell() {
                 <ShieldCheck />Sign in
               </Button>
             ) : (
-              <span className="badge">
+              <span className="badge" title={access?.role === 'admin' ? 'Team access' : (access?.pic_name || 'Customer portal')}>
                 <ShieldCheck size={12} />
-                {access?.role === 'admin' ? 'Team access' : 'Customer portal'}
+                {access?.role === 'admin' ? 'Team access' : (access?.pic_name || 'Customer portal')}
               </span>
             )}
             <span className="avatar">
-              {demo ? 'LT' : access?.actor.slice(0, 2).toUpperCase()}
+              {demo ? 'LT' : (access?.role === 'customer' && access?.pic_name ? access.pic_name : access?.actor || '').slice(0, 2).toUpperCase()}
             </span>
           </div>
         </header>

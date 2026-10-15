@@ -5,7 +5,7 @@ import { FileUp, Download, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useWorkspace } from '@/components/feedback-provider';
-import { TeamOnly, activityBadge, categoryBadge, fmtDate } from '@/components/feedback-views';
+import { TeamOnly, activityBadge, categoryBadge, fmtDate, fmtReportDate } from '@/components/feedback-views';
 import { downloadTemplate, previewImport, commitImport, type ImportPreview } from '@/lib/excel.functions';
 import { MAX_IMPORT_BYTES, MAX_IMPORT_ROWS } from '@/lib/feedback-model';
 
@@ -403,7 +403,7 @@ function UploadInner() {
                       <td><span className={`badge ${categoryBadge(r.category)}`}>{r.category}</span></td>
                       <td>{r.status}</td>
                       <td><span className={`badge ${activityBadge(r.activity)}`}>{r.activity}</span></td>
-                      <td>{fmtDate(r.report_date)}</td>
+                      <td>{fmtReportDate(r.report_date)}</td>
                       <td>{fmtDate(r.estimated_date)}</td>
                       <td>{r.is_update ? 'Update' : 'New'}</td>
                     </tr>

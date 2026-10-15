@@ -3,14 +3,41 @@ import { Link } from '@tanstack/react-router';
 import { useWorkspace } from './feedback-provider';
 import { Button } from '@/components/ui/button';
 import { X, Trash2, RotateCcw, ShieldCheck, Image as ImageIcon, Pencil, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { types, categories, statuses, activities, todayWIB, parseImages, serializeImages, type Customer, type FeedbackItem, type ItemInput } from '@/lib/feedback-model';
+import { types, categories, statuses, activities, todayWIB, createActionReportDate, parseImages, serializeImages, type Customer, type FeedbackItem, type ItemInput } from '@/lib/feedback-model';
 
 export const activityBadge = (a: string) => (a === 'Done' ? 'done' : a === 'In progress' ? 'progress' : 'pending');
 export const categoryBadge = (c: string) => (c === 'Major' ? 'major' : c === 'Medium' ? 'medium' : '');
 export const statusBadge = (s: string) => (s === 'Waiting' ? 'status-waiting' : s === 'Execution' ? 'status-execution' : s === 'Execution by notes' ? 'status-execution-notes' : '');
 export const reviewBadge = (needsReview?: boolean) => (needsReview ? 'needs-update' : 'updated');
 export function fmtDate(d?: string | null) { if (!d) return '—'; return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(d)); }
-export function fmtDateTime(iso?: string | null) { if (!iso) return '—'; return new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Jakarta', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso)); }
+export function fmtDateTime(iso?: string | null) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return iso;
+    return new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Jakarta',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(d);
+  } catch {
+    return iso;
+  }
+}
+export function fmtReportDate(reportDate?: string | null, fallbackTimestamp?: string | null) {
+  if (!reportDate && !fallbackTimestamp) return '—';
+  if (reportDate && (reportDate.includes('T') || reportDate.includes(':'))) {
+    return fmtDateTime(reportDate);
+  }
+  if (fallbackTimestamp && (fallbackTimestamp.includes('T') || fallbackTimestamp.includes(':'))) {
+    return fmtDateTime(fallbackTimestamp);
+  }
+  return reportDate ? fmtDate(reportDate) : '—';
+}
 
 export function TeamOnly({ children }: { children: ReactNode }) {
   const { access, openLogin } = useWorkspace();
@@ -710,9 +737,9 @@ export function DetailModal({
         </div>
         <dl className="detail-grid">
           <div><dt>Customer</dt><dd>{customer?.name ?? '—'}</dd></div>
-          <div><dt>PIC Name</dt><dd>{item.pic_name || '—'}</dd></div>
+          <div><dt>PIC Name</dt><dd>{item.pic_name || (item.actor && item.actor !== customer?.name && item.actor !== 'Internal team' && item.actor !== 'Loop Team' && item.actor !== 'Admin' ? item.actor : '—')}</dd></div>
           <div><dt>Feature</dt><dd>{item.feature || '—'}</dd></div>
-          <div><dt>Report date</dt><dd>{fmtDate(item.report_date ?? item.updated_at.slice(0, 10))}</dd></div>
+          <div><dt>Report date</dt><dd>{fmtReportDate(item.report_date, item.updated_at)}</dd></div>
           {showReview && (
             <div>
               <dt>Review Status</dt>
@@ -952,6 +979,8 @@ export function FormModal({
     });
   }, [items, isCustomer, defaultCustId, selectedCustId]);
 
+  const activePic = access?.pic_name || (typeof window !== 'undefined' ? localStorage.getItem('loop_active_pic_name') : null) || (access?.role === 'admin' ? access?.actor : null) || null;
+
   const [form, setForm] = useState<ItemInput>(() => item
     ? {
         customer_id: item.customer_id,
@@ -968,7 +997,7 @@ export function FormModal({
         estimated_date: item.estimated_date,
         needs_review: !isCustomer && item.needs_review ? false : (item.needs_review ?? false),
         image: item.image ?? null,
-        pic_name: item.pic_name ?? (isCustomer ? (access?.pic_name || null) : null),
+        pic_name: item.pic_name ?? activePic,
       }
     : {
         customer_id: defaultCustId,
@@ -985,7 +1014,7 @@ export function FormModal({
         estimated_date: null,
         needs_review: isCustomer,
         image: null,
-        pic_name: isCustomer ? (access?.pic_name || null) : null,
+        pic_name: activePic,
       });
 
   const [error, setError] = useState('');
@@ -1036,12 +1065,12 @@ export function FormModal({
         ...form,
         customer_id: finalCustId,
         number: assignedNumber,
-        report_date: isCustomer ? (item ? (item.report_date ?? item.updated_at.slice(0, 10)) : todayWIB()) : (form.report_date || todayWIB()),
+        report_date: createActionReportDate(isCustomer ? null : form.report_date),
         feature: trimmedFeature,
         feedback: form.feedback.trim(),
         detail: form.detail.trim(),
         image: form.image || null,
-        pic_name: form.pic_name?.trim() || (isCustomer ? (access?.pic_name || null) : null),
+        pic_name: form.pic_name?.trim() || activePic || null,
         type: isCustomer ? (item ? form.type : 'Bug Report') : form.type,
         category: isCustomer ? (item ? form.category : 'Minor') : form.category,
         status: isCustomer ? (item ? form.status : 'Waiting') : form.status,
@@ -1152,7 +1181,7 @@ export function FormModal({
         aria-modal="true"
       >
         <div className="modal-header">
-          <h2>{isCustomer ? (item ? 'Edit feedback' : 'Submit feedback') : item ? 'Edit feedback' : 'New feedback'}</h2>
+          <h2>{isCustomer ? (item ? 'Edit Ticket' : 'Submit Ticket') : item ? 'Edit feedback' : 'New Ticket'}</h2>
           <Button variant="ghost" size="icon" aria-label="Close" onClick={onClose}><X /></Button>
         </div>
         <form onSubmit={submit}>
@@ -1197,9 +1226,9 @@ export function FormModal({
                   <input
                     type="text"
                     maxLength={100}
-                    value={form.pic_name || ''}
+                    value={form.pic_name || activePic || ''}
                     onChange={set('pic_name')}
-                    placeholder="PIC name"
+                    placeholder={activePic || 'PIC name'}
                     title="Person in charge submitting this feedback"
                   />
                   <span className="text-[13px] text-muted-foreground mt-0.5">
@@ -1209,15 +1238,15 @@ export function FormModal({
                 <label className="form-field">
                   Report Date
                   <input
-                    type="date"
-                    value={item ? (item.report_date ?? item.updated_at.slice(0, 10)) : todayWIB()}
+                    type="text"
+                    value={item ? fmtReportDate(item.report_date, item.updated_at) : 'Automatically recorded on submit'}
                     readOnly
                     disabled
                     style={{ opacity: 0.85, cursor: 'not-allowed', backgroundColor: 'var(--secondary)' }}
-                    title="Report date automatically recorded on submission"
+                    title="Report date & time automatically recorded on submission"
                   />
                   <span className="text-[13px] text-muted-foreground mt-0.5">
-                    {item ? 'Recorded on submission' : 'Set to today upon submission'}
+                    {item ? 'Recorded on submission' : 'Tanggal & jam otomatis tersimpan saat submit'}
                   </span>
                 </label>
                 {renderFeatureField()}
@@ -1288,10 +1317,13 @@ export function FormModal({
                 <label className="form-field">Report date
                   <input
                     type="date"
-                    value={form.report_date ?? (item ? (item.report_date ?? item.updated_at.slice(0, 10)) : todayWIB())}
+                    value={form.report_date ? (form.report_date.includes('T') ? form.report_date.slice(0, 10) : form.report_date) : (item ? (item.report_date?.slice(0, 10) ?? item.updated_at.slice(0, 10)) : todayWIB())}
                     onChange={e => setForm(f => ({ ...f, report_date: e.target.value || null }))}
                     title="Date feedback was submitted"
                   />
+                  <span className="text-[13px] text-muted-foreground mt-0.5">
+                    Jam menyesuaikan otomatis saat klik save/submit
+                  </span>
                 </label>
                 {renderFeatureField()}
                 <label className="form-field full">Feedback<textarea required maxLength={1000} value={form.feedback} onChange={set('feedback')} placeholder="Describe the feedback" /></label>
@@ -1379,7 +1411,7 @@ export function FormModal({
             )}
             <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
             <Button type="submit" disabled={busy}>
-              {busy ? 'Saving…' : isCustomer ? (item ? 'Save feedback' : 'Submit feedback') : item?.needs_review ? 'Update feedback (Mark as Updated)' : 'Save feedback'}
+              {busy ? 'Saving…' : isCustomer ? (item ? 'Save Ticket' : 'Submit Ticket') : item?.needs_review ? 'Update feedback (Mark as Updated)' : item ? 'Save feedback' : 'Submit Ticket'}
             </Button>
           </div>
         </form>

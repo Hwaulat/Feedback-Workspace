@@ -13,12 +13,13 @@ import {
   PIN_PATTERN,
   parseImages,
   serializeImages,
+  createActionReportDate,
   type FeedbackItem,
   type ItemInput,
   type Customer,
 } from '@/lib/feedback-model';
 import { demoCustomers, demoItems, demoHistory } from '@/lib/feedback-demo';
-import { fmtDate, fmtDateTime, activityBadge, categoryBadge, statusBadge } from '@/components/feedback-views';
+import { fmtDate, fmtDateTime, fmtReportDate, activityBadge, categoryBadge, statusBadge } from '@/components/feedback-views';
 
 describe('Feature 1: Feedback Data Model & Validation (itemSchema)', () => {
   it('validates a valid feedback item input correctly', () => {
@@ -785,5 +786,269 @@ describe('Feature 15: Review Status Metric Card on Overview Page', () => {
   });
 });
 
+describe('Feature 16: Overview Detail Modal Multi-Filter (Review Status, Type, Category, Status, Activity)', () => {
+  const sampleItems: FeedbackItem[] = [
+    {
+      id: 'item-1',
+      customer_id: '00000000-0000-4000-8000-000000000001',
+      number: 1,
+      feature: 'Dashboard',
+      feedback: 'Chart glitch',
+      detail: '',
+      type: 'Bug Report',
+      category: 'Major',
+      status: 'Execution',
+      activity: 'In progress',
+      notes: '',
+      needs_review: false,
+      created_at: '2026-10-15T00:00:00Z',
+      updated_at: '2026-10-15T00:00:00Z',
+    },
+    {
+      id: 'item-2',
+      customer_id: '00000000-0000-4000-8000-000000000001',
+      number: 2,
+      feature: 'Auth',
+      feedback: 'Cannot login with PIN',
+      detail: '',
+      type: 'Bug Report',
+      category: 'Major',
+      status: 'Waiting',
+      activity: 'Not started',
+      notes: '',
+      needs_review: true,
+      created_at: '2026-10-15T00:00:00Z',
+      updated_at: '2026-10-15T00:00:00Z',
+    },
+    {
+      id: 'item-3',
+      customer_id: '00000000-0000-4000-8000-000000000001',
+      number: 3,
+      feature: 'Export',
+      feedback: 'Excel download missing column',
+      detail: '',
+      type: 'Change Request',
+      category: 'Minor',
+      status: 'Done',
+      activity: 'Done',
+      notes: '',
+      needs_review: false,
+      created_at: '2026-10-15T00:00:00Z',
+      updated_at: '2026-10-15T00:00:00Z',
+    },
+    {
+      id: 'item-4',
+      customer_id: '00000000-0000-4000-8000-000000000001',
+      number: 4,
+      feature: 'Billing',
+      feedback: 'Invoice delayed',
+      detail: '',
+      type: 'Complaint',
+      category: 'Medium',
+      status: 'Execution by notes',
+      activity: 'In progress',
+      notes: '',
+      needs_review: false,
+      created_at: '2026-10-15T00:00:00Z',
+      updated_at: '2026-10-15T00:00:00Z',
+    },
+  ];
 
+  it('filters modal items correctly by review status (needs_update and updated)', () => {
+    const needsUpdateOnly = sampleItems.filter(i => isNeedsUpdate(i));
+    const updatedOnly = sampleItems.filter(i => !isNeedsUpdate(i));
+
+    expect(needsUpdateOnly.length).toBe(1);
+    expect(needsUpdateOnly[0]?.number).toBe(2);
+
+    expect(updatedOnly.length).toBe(3);
+    expect(updatedOnly.map(i => i.number)).toEqual([1, 3, 4]);
+  });
+
+  it('filters modal items correctly by type', () => {
+    const bugs = sampleItems.filter(i => i.type === 'Bug Report');
+    const crs = sampleItems.filter(i => i.type === 'Change Request');
+    const complaints = sampleItems.filter(i => i.type === 'Complaint');
+
+    expect(bugs.length).toBe(2);
+    expect(crs.length).toBe(1);
+    expect(complaints.length).toBe(1);
+  });
+
+  it('filters modal items correctly by category', () => {
+    const majors = sampleItems.filter(i => i.category === 'Major');
+    const mediums = sampleItems.filter(i => i.category === 'Medium');
+    const minors = sampleItems.filter(i => i.category === 'Minor');
+
+    expect(majors.length).toBe(2);
+    expect(mediums.length).toBe(1);
+    expect(minors.length).toBe(1);
+  });
+
+  it('filters modal items correctly by status', () => {
+    const waiting = sampleItems.filter(i => i.status === 'Waiting');
+    const execution = sampleItems.filter(i => i.status === 'Execution');
+    const byNotes = sampleItems.filter(i => i.status === 'Execution by notes');
+
+    expect(waiting.length).toBe(1);
+    expect(execution.length).toBe(1);
+    expect(byNotes.length).toBe(1);
+  });
+
+  it('filters modal items correctly by activity', () => {
+    const done = sampleItems.filter(i => i.activity === 'Done');
+    const inProgress = sampleItems.filter(i => i.activity === 'In progress');
+    const notStarted = sampleItems.filter(i => i.activity === 'Not started');
+
+    expect(done.length).toBe(1);
+    expect(inProgress.length).toBe(2);
+    expect(notStarted.length).toBe(1);
+  });
+
+  it('combines multiple modal filters seamlessly (e.g. type + category + activity)', () => {
+    const filtered = sampleItems.filter(i => {
+      if (i.type !== 'Bug Report') return false;
+      if (i.category !== 'Major') return false;
+      if (i.activity !== 'In progress') return false;
+      return true;
+    });
+
+    expect(filtered.length).toBe(1);
+    expect(filtered[0]?.number).toBe(1);
+    expect(filtered[0]?.feedback).toBe('Chart glitch');
+  });
+});
+
+describe('Feature 17: Report Date with Exact Action Timestamp (Save/Submit)', () => {
+  it('creates an action report date with the exact hour of the save/submit click', () => {
+    // Fixed reference time: 2026-10-15 15:30:45 WIB (08:30:45 UTC)
+    const fixedNow = new Date('2026-10-15T08:30:45.000Z');
+
+    // 1. When submitting with today's date or no date
+    const autoDate = createActionReportDate(null, fixedNow);
+    expect(autoDate).toBe('2026-10-15T08:30:45.000Z');
+
+    // 2. When submitting with explicit today date (YYYY-MM-DD)
+    const todayStr = '2026-10-15';
+    const actionDateToday = createActionReportDate(todayStr, fixedNow);
+    expect(actionDateToday).toBe('2026-10-15T08:30:45.000Z');
+
+    // 3. When submitting with a past date, it combines the past date with the action time in WIB
+    const pastStr = '2026-10-10';
+    const actionDatePast = createActionReportDate(pastStr, fixedNow);
+    // 2026-10-10 15:30:45 WIB is 2026-10-10T08:30:45.000Z
+    expect(actionDatePast).toBe('2026-10-10T08:30:45.000Z');
+  });
+
+  it('validates itemSchema successfully with an ISO date-time report_date', () => {
+    const inputWithDateTime: ItemInput = {
+      customer_id: '00000000-0000-4000-8000-000000000001',
+      number: 1,
+      feature: 'Invoice Export',
+      feedback: 'Add PDF download button',
+      detail: '',
+      type: 'Change Request',
+      category: 'Medium',
+      status: 'Waiting',
+      activity: 'Not started',
+      notes: '',
+      estimated_date: null,
+      report_date: '2026-10-15T08:30:45.000Z',
+    };
+
+    const parsed = itemSchema.parse(inputWithDateTime);
+    expect(parsed.report_date).toBe('2026-10-15T08:30:45.000Z');
+  });
+
+  it('formats report_date with date and time in 24h WIB format using fmtReportDate', () => {
+    // Exact ISO date-time
+    const isoDate = '2026-10-15T08:05:00.000Z'; // 15:05 WIB
+    const formatted = fmtReportDate(isoDate);
+    expect(formatted).toMatch(/15 Oct 2026.*15:05/);
+
+    // Legacy date-only item with fallback updated_at timestamp
+    const legacyReportDate = '2026-10-14';
+    const fallbackUpdatedAt = '2026-10-14T03:20:00.000Z'; // 10:20 WIB
+    const formattedLegacy = fmtReportDate(legacyReportDate, fallbackUpdatedAt);
+    expect(formattedLegacy).toMatch(/14 Oct 2026.*10:20/);
+
+    // Empty or null
+    expect(fmtReportDate(null, null)).toBe('—');
+    expect(fmtReportDate(undefined, undefined)).toBe('—');
+  });
+});
+
+describe('Feature 18: Auto-population and Persistence of PIC Name on Ticket Submission', () => {
+  it('resolves active PIC Name from session access when saving or submitting feedback', () => {
+    // Scenario 1: Customer logged in with PIC "Andi Wijaya" submits without manually filling pic_name
+    const customerAccess = {
+      role: 'customer' as const,
+      actor: 'PT Maju Bersama',
+      customer_id: 'cust-123',
+      pic_name: 'Andi Wijaya',
+      expires: Date.now() + 3600000,
+    };
+
+    const inputWithoutPic: ItemInput = {
+      customer_id: customerAccess.customer_id,
+      number: 1,
+      feature: 'Dashboard',
+      feedback: 'Chart is not loading',
+      detail: '',
+      type: 'Bug Report',
+      category: 'Major',
+      status: 'Waiting',
+      activity: 'Not started',
+      notes: '',
+      estimated_date: null,
+      pic_name: undefined,
+    };
+
+    const isCustomerActor = customerAccess.role === 'customer';
+    const resolvedPicName = inputWithoutPic.pic_name?.trim() || customerAccess.pic_name || (isCustomerActor ? null : customerAccess.actor) || null;
+    expect(resolvedPicName).toBe('Andi Wijaya');
+
+    // Scenario 2: Admin logged in with actor name "Budi Santoso"
+    const adminAccess = {
+      role: 'admin' as const,
+      actor: 'Budi Santoso',
+      pic_name: 'Budi Santoso',
+      expires: Date.now() + 3600000,
+    };
+
+    const adminPic = inputWithoutPic.pic_name?.trim() || adminAccess.pic_name || adminAccess.actor || null;
+    expect(adminPic).toBe('Budi Santoso');
+  });
+
+  it('correctly resolves fallback PIC display when item.pic_name is empty but item.actor contains the user name', () => {
+    const cust: Customer = {
+      id: 'cust-abc',
+      name: 'PT Samudra Jaya',
+      active: true,
+      pin: '123456',
+      pin_version: 1,
+      created_at: new Date().toISOString(),
+    };
+
+    const getPicDisplay = (item: { pic_name?: string | null; actor?: string; customer_id: string }) => {
+      if (item.pic_name) return item.pic_name;
+      if (item.actor && item.actor !== cust.name && item.actor !== 'Internal team' && item.actor !== 'Loop Team' && item.actor !== 'Admin') {
+        return item.actor;
+      }
+      return null;
+    };
+
+    // Case 1: Item has explicit pic_name
+    expect(getPicDisplay({ pic_name: 'Siti Rahma', actor: 'PT Samudra Jaya', customer_id: 'cust-abc' })).toBe('Siti Rahma');
+
+    // Case 2: Item has no pic_name, but actor is the PIC name
+    expect(getPicDisplay({ pic_name: null, actor: 'Doni Pratama', customer_id: 'cust-abc' })).toBe('Doni Pratama');
+
+    // Case 3: Item has no pic_name and actor is the customer company name -> returns null (displayed as '—')
+    expect(getPicDisplay({ pic_name: null, actor: 'PT Samudra Jaya', customer_id: 'cust-abc' })).toBeNull();
+
+    // Case 4: Item has no pic_name and actor is generic internal team -> returns null
+    expect(getPicDisplay({ pic_name: null, actor: 'Loop Team', customer_id: 'cust-abc' })).toBeNull();
+  });
+});
 

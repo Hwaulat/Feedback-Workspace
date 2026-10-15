@@ -67,7 +67,7 @@ export const signIn = createServerFn({ method: 'POST' })
         diff |= (data.passcode.charCodeAt(i) || 0) ^ (expected.charCodeAt(i) || 0);
       }
       if (match && diff === 0 && data.actor) {
-        access = { role: 'admin', actor: data.actor, expires: Date.now() + SESSION_SECONDS * 1000 };
+        access = { role: 'admin', actor: data.actor, expires: Date.now() + SESSION_SECONDS * 1000, pic_name: data.actor };
       }
     } else if (PIN_PATTERN.test(data.passcode)) {
       const hash = pinHash(data.passcode);
@@ -189,21 +189,34 @@ export const getWorkspace = createServerFn({ method: 'GET' }).handler(
           if (!cq.error && !iq.error) {
             const rawItems = (iq.data ?? []) as any[];
             let localItemMap = new Map<string, FeedbackItem>();
+            let localByKey = new Map<string, FeedbackItem>();
             try {
               const localStore = await readServerStore();
               localItemMap = new Map(localStore.items.map(i => [i.id, i]));
+              localByKey = new Map(localStore.items.map(i => [`${i.customer_id}:${i.number}`, i]));
             } catch {}
 
-            const mappedItems: FeedbackItem[] = rawItems.map(item => ({
-              ...item,
-              activity: (item.activity === 'Pending' ? 'Not started' : item.activity) as any,
-              needs_review: item.needs_review ?? false,
-              image: item.image ?? null,
-              notes: item.notes ?? '',
-              detail: item.detail ?? '',
-              feature: item.feature ?? '',
-              pic_name: (item as any).pic_name ?? localItemMap.get(item.id)?.pic_name ?? null,
-            }));
+            const customerList = (cq.data ?? []) as any[];
+            const customerMap = new Map<string, string>();
+            customerList.forEach(c => customerMap.set(c.id, c.name));
+
+            const mappedItems: FeedbackItem[] = rawItems.map(item => {
+              const local = localItemMap.get(item.id) || localByKey.get(`${item.customer_id}:${item.number}`);
+              const custName = customerMap.get(item.customer_id);
+              const actorIsPic = item.actor && item.actor !== custName && item.actor !== 'Internal team' && item.actor !== 'Loop Team';
+              const resolvedPic = (item as any).pic_name || local?.pic_name || (actorIsPic ? item.actor : null);
+
+              return {
+                ...item,
+                activity: (item.activity === 'Pending' ? 'Not started' : item.activity) as any,
+                needs_review: item.needs_review ?? false,
+                image: item.image ?? null,
+                notes: item.notes ?? '',
+                detail: item.detail ?? '',
+                feature: item.feature ?? '',
+                pic_name: resolvedPic,
+              };
+            });
 
             const customers: Customer[] = (cq.data ?? []) as any[];
             const history: HistoryEntry[] = (hq.data ?? []) as any[];
@@ -247,6 +260,8 @@ export const saveItem = createServerFn({ method: 'POST' })
     const isCustomerActor = access.role === 'customer';
     const resolvedNeedsReview = isCustomerActor ? true : (data.item.needs_review ?? false);
     const resolvedImage = data.item.image !== undefined ? data.item.image : null;
+    const resolvedPicName = data.item.pic_name?.trim() || access.pic_name || (isCustomerActor ? null : access.actor) || null;
+    const dbActor = resolvedPicName || access.actor;
     const { needs_review: _nr, image: _img, pic_name: _pic, ...dbItem } = data.item;
     const targetCustomerId = isCustomerActor ? access.customer_id! : data.item.customer_id;
 
@@ -262,7 +277,7 @@ export const saveItem = createServerFn({ method: 'POST' })
               needs_review: resolvedNeedsReview,
               image: resolvedImage,
               report_date: data.item.report_date ?? null,
-              actor: access.actor,
+              actor: dbActor,
               version: (data.version ?? 1) + 1,
               updated_at: nowIso,
             })
@@ -281,7 +296,7 @@ export const saveItem = createServerFn({ method: 'POST' })
               activity: (updated.activity === 'Pending' ? 'Not started' : updated.activity) as any,
               needs_review: updated.needs_review ?? false,
               image: updated.image ?? null,
-              pic_name: data.item.pic_name ?? null,
+              pic_name: resolvedPicName,
             };
           }
         } else {
@@ -324,7 +339,7 @@ export const saveItem = createServerFn({ method: 'POST' })
                 needs_review: resolvedNeedsReview,
                 image: resolvedImage,
                 report_date: data.item.report_date ?? null,
-                actor: access.actor,
+                actor: dbActor,
                 version: 1,
                 updated_at: nowIso,
               })
@@ -337,7 +352,7 @@ export const saveItem = createServerFn({ method: 'POST' })
                 activity: (inserted.activity === 'Pending' ? 'Not started' : inserted.activity) as any,
                 needs_review: inserted.needs_review ?? false,
                 image: inserted.image ?? null,
-                pic_name: data.item.pic_name ?? null,
+                pic_name: resolvedPicName,
               };
               lastInsertError = null;
               break;
@@ -398,8 +413,8 @@ export const saveItem = createServerFn({ method: 'POST' })
     // 2. Fallback / local sync to server store
     try {
       const localSaved = await saveServerItem(
-        saved ? { ...data.item, number: saved.number } : data.item,
-        access.actor,
+        saved ? { ...data.item, pic_name: resolvedPicName, number: saved.number } : { ...data.item, pic_name: resolvedPicName },
+        dbActor,
         saved?.id || data.id,
         saved?.version || data.version,
         access.role === 'customer',

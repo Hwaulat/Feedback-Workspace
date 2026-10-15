@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Inbox, CheckCircle2, LoaderCircle, Hourglass, GitPullRequest, ArrowRight, Download, X, ClipboardCheck } from 'lucide-react';
+import { Inbox, CheckCircle2, LoaderCircle, Hourglass, GitPullRequest, ArrowRight, Download, X, ClipboardCheck, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
-import { DetailModal, activityBadge, categoryBadge, statusBadge, fmtDate } from '@/components/feedback-views';
-import { categories, activities, isOverdue, isNeedsUpdate, type FeedbackItem } from '@/lib/feedback-model';
+import { DetailModal, activityBadge, categoryBadge, statusBadge, fmtDate, fmtReportDate } from '@/components/feedback-views';
+import { types, categories, statuses, activities, isOverdue, isNeedsUpdate, type FeedbackItem } from '@/lib/feedback-model';
 
 export const Route = createFileRoute('/')({
   head: () => ({ meta: [{ title: 'Loop — Overview' }, { name: 'description', content: 'Live overview of customer feedback, progress and change requests.' }] }),
@@ -14,7 +14,77 @@ export const Route = createFileRoute('/')({
 function Overview() {
   const { access, demo, customers, items, selectedCustomer, setSelectedCustomer, exportToExcel } = useWorkspace();
   const [detail, setDetail] = useState<FeedbackItem | null>(null);
-  const [popupCategory, setPopupCategory] = useState<'done' | 'inprogress' | 'notstarted' | 'changerequest' | 'overdue' | 'review_status' | 'needs_update' | 'updated' | null>(null);
+  const [popupCategory, setPopupCategory] = useState<'all' | 'done' | 'inprogress' | 'notstarted' | 'changerequest' | 'overdue' | 'review_status' | 'needs_update' | 'updated' | null>(null);
+  const [modalReviewFilter, setModalReviewFilter] = useState<'all' | 'needs_update' | 'updated'>('all');
+  const [modalTypeFilter, setModalTypeFilter] = useState<string>('all');
+  const [modalCategoryFilter, setModalCategoryFilter] = useState<string>('all');
+  const [modalStatusFilter, setModalStatusFilter] = useState<string>('all');
+  const [modalActivityFilter, setModalActivityFilter] = useState<string>('all');
+  const [modalSearch, setModalSearch] = useState<string>('');
+
+  const openPopup = (cat: 'all' | 'done' | 'inprogress' | 'notstarted' | 'changerequest' | 'overdue' | 'review_status' | 'needs_update' | 'updated') => {
+    setPopupCategory(cat);
+    setModalSearch('');
+    setModalCategoryFilter('all');
+    setModalStatusFilter('all');
+
+    if (cat === 'needs_update') {
+      setModalReviewFilter('needs_update');
+      setModalTypeFilter('all');
+      setModalActivityFilter('all');
+    } else if (cat === 'updated') {
+      setModalReviewFilter('updated');
+      setModalTypeFilter('all');
+      setModalActivityFilter('all');
+    } else if (cat === 'changerequest') {
+      setModalReviewFilter('all');
+      setModalTypeFilter('Change Request');
+      setModalActivityFilter('all');
+    } else if (cat === 'done') {
+      setModalReviewFilter('all');
+      setModalTypeFilter('all');
+      setModalActivityFilter('Done');
+    } else if (cat === 'inprogress') {
+      setModalReviewFilter('all');
+      setModalTypeFilter('all');
+      setModalActivityFilter('In progress');
+    } else if (cat === 'notstarted') {
+      setModalReviewFilter('all');
+      setModalTypeFilter('all');
+      setModalActivityFilter('Not started');
+    } else {
+      setModalReviewFilter('all');
+      setModalTypeFilter('all');
+      setModalActivityFilter('all');
+    }
+  };
+
+  const hasActiveModalFilters =
+    modalReviewFilter !== 'all' ||
+    modalTypeFilter !== 'all' ||
+    modalCategoryFilter !== 'all' ||
+    modalStatusFilter !== 'all' ||
+    modalActivityFilter !== 'all' ||
+    modalSearch.trim().length > 0;
+
+  const resetModalFilters = () => {
+    setModalReviewFilter('all');
+    setModalTypeFilter('all');
+    setModalCategoryFilter('all');
+    setModalStatusFilter('all');
+    setModalActivityFilter('all');
+    setModalSearch('');
+  };
+
+  const getPicDisplay = (item: FeedbackItem) => {
+    if (item.pic_name) return item.pic_name;
+    const cust = customers.find(c => c.id === item.customer_id);
+    if (item.actor && item.actor !== cust?.name && item.actor !== 'Internal team' && item.actor !== 'Loop Team' && item.actor !== 'Admin') {
+      return item.actor;
+    }
+    return null;
+  };
+
   const [recentTypeTab, setRecentTypeTab] = useState<'all' | 'Complaint' | 'Change Request' | 'Bug Report'>('all');
   const [recentCategory, setRecentCategory] = useState<string>('all');
   const [recentActivity, setRecentActivity] = useState<string>('all');
@@ -127,8 +197,84 @@ function Overview() {
         items: active.filter(i => !isNeedsUpdate(i, customers)),
       };
     }
+    if (popupCategory === 'all') {
+      return {
+        title: 'All Feedback Items',
+        subtitle: `Complete overview of recorded feedback (${total} items)`,
+        items: active,
+      };
+    }
     return null;
   }, [popupCategory, active, updatedCount, needsUpdateCount, total, customers]);
+
+  const modalFilteredItems = useMemo(() => {
+    if (!popupCategory || !popupData) return [];
+
+    let list = [...active];
+
+    if (popupCategory === 'overdue') {
+      list = list.filter(i => isOverdue(i));
+    }
+
+    return list
+      .filter(item => {
+        if (modalReviewFilter === 'needs_update') {
+          if (!isNeedsUpdate(item, customers)) return false;
+        } else if (modalReviewFilter === 'updated') {
+          if (isNeedsUpdate(item, customers)) return false;
+        }
+
+        if (modalTypeFilter !== 'all' && item.type !== modalTypeFilter) {
+          return false;
+        }
+
+        if (modalCategoryFilter !== 'all' && item.category !== modalCategoryFilter) {
+          return false;
+        }
+
+        if (modalStatusFilter !== 'all' && item.status !== modalStatusFilter) {
+          return false;
+        }
+
+        if (modalActivityFilter !== 'all') {
+          const act = (item.activity as string) === 'Pending' ? 'Not started' : item.activity;
+          if (act !== modalActivityFilter) return false;
+        }
+
+        if (modalSearch.trim()) {
+          const q = modalSearch.toLowerCase().trim();
+          const custName = customers.find(c => c.id === item.customer_id)?.name?.toLowerCase() || '';
+          const pic = (getPicDisplay(item) || '').toLowerCase();
+          const fb = item.feedback.toLowerCase();
+          const feat = (item.feature || '').toLowerCase();
+          const num = String(item.number);
+          if (!fb.includes(q) && !feat.includes(q) && !custName.includes(q) && !pic.includes(q) && !num.includes(q)) {
+            return false;
+          }
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (popupCategory === 'review_status') {
+          const aNeeds = isNeedsUpdate(a, customers) ? 0 : 1;
+          const bNeeds = isNeedsUpdate(b, customers) ? 0 : 1;
+          if (aNeeds !== bNeeds) return aNeeds - bNeeds;
+        }
+        return b.number - a.number;
+      });
+  }, [
+    popupCategory,
+    popupData,
+    active,
+    modalReviewFilter,
+    modalTypeFilter,
+    modalCategoryFilter,
+    modalStatusFilter,
+    modalActivityFilter,
+    modalSearch,
+    customers,
+  ]);
 
   return (
     <>
@@ -137,7 +283,7 @@ function Overview() {
           <h1>Overview</h1>
           <p>
             {demo
-              ? 'A live demo of the feedback workspace — sign in to work with your own data.'
+              ? 'A live demo of the ticketing workspace — sign in to work with your own data.'
               : access?.role === 'customer'
               ? 'Feedback recorded for your account.'
               : 'Every piece of customer feedback, at a glance.'}
@@ -186,6 +332,14 @@ function Overview() {
           <div className="metric-value">{total}</div>
           <div className="metric-foot">
             <span>{access?.role === 'customer' ? 'Your active feedback' : `Across ${customers.length} customers`}</span>
+            <button
+              type="button"
+              className="metric-tertiary-btn"
+              onClick={() => openPopup('all')}
+              aria-label="View all feedback details"
+            >
+              Details &rarr;
+            </button>
           </div>
         </div>
 
@@ -199,7 +353,7 @@ function Overview() {
               <button
                 type="button"
                 className="review-stat-pill updated"
-                onClick={() => setPopupCategory('updated')}
+                onClick={() => openPopup('updated')}
                 title={`${updatedCount} items Updated — click to view list`}
               >
                 <span className="badge-dot" style={{ backgroundColor: '#10b981' }} />
@@ -209,7 +363,7 @@ function Overview() {
               <button
                 type="button"
                 className="review-stat-pill needs-update"
-                onClick={() => setPopupCategory('needs_update')}
+                onClick={() => openPopup('needs_update')}
                 title={`${needsUpdateCount} items Needs Update — click to view list`}
               >
                 <span className="badge-dot" style={{ backgroundColor: '#ea580c' }} />
@@ -223,7 +377,7 @@ function Overview() {
             <button
               type="button"
               className="metric-tertiary-btn"
-              onClick={() => setPopupCategory('review_status')}
+              onClick={() => openPopup('review_status')}
               aria-label="View Review Status feedback details"
             >
               Details &rarr;
@@ -242,7 +396,7 @@ function Overview() {
             <button
               type="button"
               className="metric-tertiary-btn"
-              onClick={() => setPopupCategory('done')}
+              onClick={() => openPopup('done')}
               aria-label="View Done feedback details"
             >
               Details &rarr;
@@ -261,7 +415,7 @@ function Overview() {
             <button
               type="button"
               className="metric-tertiary-btn"
-              onClick={() => setPopupCategory('inprogress')}
+              onClick={() => openPopup('inprogress')}
               aria-label="View In progress feedback details"
             >
               Details &rarr;
@@ -280,7 +434,7 @@ function Overview() {
             <button
               type="button"
               className="metric-tertiary-btn"
-              onClick={() => setPopupCategory('notstarted')}
+              onClick={() => openPopup('notstarted')}
               aria-label="View Not started feedback details"
             >
               Details &rarr;
@@ -299,7 +453,7 @@ function Overview() {
             <button
               type="button"
               className="metric-tertiary-btn"
-              onClick={() => setPopupCategory('changerequest')}
+              onClick={() => openPopup('changerequest')}
               aria-label="View Change Request feedback details"
             >
               Details &rarr;
@@ -528,6 +682,7 @@ function Overview() {
                   <th>Type</th>
                   <th>Category</th>
                   <th>Activity</th>
+                  <th>Report Date</th>
                   <th>Estimated</th>
                   <th>Updated</th>
                 </tr>
@@ -579,6 +734,7 @@ function Overview() {
                         <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
                       )}
                     </td>
+                    <td>{fmtReportDate(item.report_date, item.updated_at)}</td>
                     <td>
                       {fmtDate(item.estimated_date)}
                       {isOverdue(item) && <span className="badge major" style={{ marginLeft: 6 }}>Overdue</span>}
@@ -595,25 +751,139 @@ function Overview() {
       {/* Pop up modal for metric details */}
       {popupData && (
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setPopupCategory(null); }}>
-          <div className="modal" style={{ width: 1000, maxWidth: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="modal" style={{ width: 1200, maxWidth: '96vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <h2>{popupData.title}</h2>
                 <span className="badge" style={{ fontSize: 13, background: '#02A9EA', color: '#ffffff', fontWeight: 600 }}>
-                  {popupData.items.length} items
+                  {modalFilteredItems.length} items
                 </span>
+                {modalFilteredItems.length !== active.length && (
+                  <span className="text-muted-foreground text-xs">
+                    (filtered from {active.length})
+                  </span>
+                )}
               </div>
               <Button variant="ghost" size="icon" aria-label="Close" onClick={() => setPopupCategory(null)}>
                 <X size={16} />
               </Button>
             </div>
-            <p className="text-muted-foreground text-sm" style={{ margin: '-14px 0 14px' }}>
+            <p className="text-muted-foreground text-sm" style={{ margin: '-14px 0 12px' }}>
               {popupData.subtitle}
             </p>
+
+            {/* Filter bar: Review Status, Type, Category, Status, Activity & Search */}
+            <div className="modal-filter-bar">
+              <div className="modal-filter-group">
+                <label htmlFor="modal-review-filter" className="modal-filter-label">Review Status</label>
+                <select
+                  id="modal-review-filter"
+                  className="modal-filter-select"
+                  value={modalReviewFilter}
+                  onChange={e => setModalReviewFilter(e.target.value as any)}
+                >
+                  <option value="all">All Review Status</option>
+                  <option value="needs_update">Needs Update ({needsUpdateCount})</option>
+                  <option value="updated">Updated ({updatedCount})</option>
+                </select>
+              </div>
+
+              <div className="modal-filter-group">
+                <label htmlFor="modal-type-filter" className="modal-filter-label">Type</label>
+                <select
+                  id="modal-type-filter"
+                  className="modal-filter-select"
+                  value={modalTypeFilter}
+                  onChange={e => setModalTypeFilter(e.target.value)}
+                >
+                  <option value="all">All Types</option>
+                  {types.map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="modal-filter-group">
+                <label htmlFor="modal-category-filter" className="modal-filter-label">Category</label>
+                <select
+                  id="modal-category-filter"
+                  className="modal-filter-select"
+                  value={modalCategoryFilter}
+                  onChange={e => setModalCategoryFilter(e.target.value)}
+                >
+                  <option value="all">All Categories</option>
+                  {categories.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="modal-filter-group">
+                <label htmlFor="modal-status-filter" className="modal-filter-label">Status</label>
+                <select
+                  id="modal-status-filter"
+                  className="modal-filter-select"
+                  value={modalStatusFilter}
+                  onChange={e => setModalStatusFilter(e.target.value)}
+                >
+                  <option value="all">All Statuses</option>
+                  {statuses.map(s => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="modal-filter-group">
+                <label htmlFor="modal-activity-filter" className="modal-filter-label">Activity</label>
+                <select
+                  id="modal-activity-filter"
+                  className="modal-filter-select"
+                  value={modalActivityFilter}
+                  onChange={e => setModalActivityFilter(e.target.value)}
+                >
+                  <option value="all">All Activities</option>
+                  {activities.map(a => (
+                    <option key={a} value={a}>{a}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="modal-filter-group" style={{ flex: 1, minWidth: 150 }}>
+                <label htmlFor="modal-search" className="modal-filter-label">Search</label>
+                <input
+                  id="modal-search"
+                  type="search"
+                  className="modal-filter-search"
+                  placeholder="Filter feedback, feature, PIC..."
+                  value={modalSearch}
+                  onChange={e => setModalSearch(e.target.value)}
+                />
+              </div>
+
+              {hasActiveModalFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="modal-filter-reset"
+                  onClick={resetModalFilters}
+                  title="Reset all modal filters"
+                  style={{ height: 32, fontSize: 12, marginTop: 16, gap: 4 }}
+                >
+                  <RotateCcw size={12} />
+                  Reset
+                </Button>
+              )}
+            </div>
+
             <div style={{ overflow: 'auto', flex: 1, marginBottom: 16 }}>
-              {popupData.items.length === 0 ? (
-                <div className="empty-state" style={{ padding: '30px 15px' }}>
-                  <p className="font-medium text-sm">No feedback in this category.</p>
+              {modalFilteredItems.length === 0 ? (
+                <div className="empty-state" style={{ padding: '36px 15px', textAlign: 'center' }}>
+                  <p className="font-medium text-sm">No feedback matching the selected filters.</p>
+                  {hasActiveModalFilters && (
+                    <Button variant="outline" size="sm" onClick={resetModalFilters} style={{ marginTop: 10 }}>
+                      Reset filters
+                    </Button>
+                  )}
                 </div>
               ) : (
                 <div className="table-wrap">
@@ -625,18 +895,19 @@ function Overview() {
                           <th>PIC Name</th>
                           <th>Feedback</th>
                           {access?.role !== 'customer' && <th>Customer</th>}
-                          {(access?.role !== 'customer' || popupCategory === 'review_status' || popupCategory === 'needs_update' || popupCategory === 'updated') && <th>Review Status</th>}
+                          <th>Review Status</th>
                           <th>Type</th>
                           <th>Category</th>
                           <th>Status</th>
                           <th>Activity</th>
+                          <th>Report Date</th>
                           <th>Notes from Ragdalion</th>
                           <th>Estimated</th>
                           <th>Updated</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {popupData.items.map(item => (
+                        {modalFilteredItems.map(item => (
                           <tr
                             key={item.id}
                             onClick={() => {
@@ -645,7 +916,7 @@ function Overview() {
                             }}
                           >
                             <td>{item.number}</td>
-                            <td>{item.pic_name ? <span className="font-medium">{item.pic_name}</span> : <span className="text-muted-foreground">—</span>}</td>
+                            <td>{getPicDisplay(item) ? <span className="font-medium">{getPicDisplay(item)}</span> : <span className="text-muted-foreground">—</span>}</td>
                             <td>
                               <div className="feedback-title">{item.feedback}</div>
                               <div className="feedback-feature">{item.feature || '—'}</div>
@@ -653,27 +924,25 @@ function Overview() {
                             {access?.role !== 'customer' && (
                               <td>{customers.find(c => c.id === item.customer_id)?.name ?? '—'}</td>
                             )}
-                            {(access?.role !== 'customer' || popupCategory === 'review_status' || popupCategory === 'needs_update' || popupCategory === 'updated') && (
-                              <td>
-                                {item.needs_review ? (
-                                  <span
-                                    className="badge needs-update"
-                                    title="Newly added by customer — update Type, Category, Status & Activity"
-                                  >
-                                    <span className="badge-dot" style={{ backgroundColor: '#ea580c' }} />
-                                    Needs Update
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="badge updated"
-                                    title="Reviewed and updated by internal team"
-                                  >
-                                    <span className="badge-dot" style={{ backgroundColor: '#10b981' }} />
-                                    Updated
-                                  </span>
-                                )}
-                              </td>
-                            )}
+                            <td>
+                              {item.needs_review ? (
+                                <span
+                                  className="badge needs-update"
+                                  title="Newly added by customer — update Type, Category, Status & Activity"
+                                >
+                                  <span className="badge-dot" style={{ backgroundColor: '#ea580c' }} />
+                                  Needs Update
+                                </span>
+                              ) : (
+                                <span
+                                  className="badge updated"
+                                  title="Reviewed and updated by internal team"
+                                >
+                                  <span className="badge-dot" style={{ backgroundColor: '#10b981' }} />
+                                  Updated
+                                </span>
+                              )}
+                            </td>
                             <td>{item.needs_review ? <span className="text-muted-foreground">—</span> : item.type}</td>
                             <td>
                               {item.needs_review ? (
@@ -696,6 +965,7 @@ function Overview() {
                                 <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
                               )}
                             </td>
+                            <td>{fmtReportDate(item.report_date, item.updated_at)}</td>
                             <td style={{ maxWidth: 240, whiteSpace: 'normal' }} title={item.notes || undefined}>
                               {item.notes ? (
                                 <span style={{ display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>

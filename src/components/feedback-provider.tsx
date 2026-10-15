@@ -249,8 +249,10 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
           role: 'admin',
           actor: cleanActor,
           expires: Date.now() + 8 * 3600 * 1000,
+          pic_name: cleanActor,
         };
         setClientAccess(adminAccess);
+        if (typeof window !== 'undefined') localStorage.setItem('loop_active_pic_name', cleanActor);
         await refresh();
         toast.success(`Welcome back, ${cleanActor}`);
         return { ok: true };
@@ -261,8 +263,9 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     } catch {}
 
     if (passcode === 'admin123') {
-      const adminAccess: Access = { role: 'admin', actor: cleanActor, expires: Date.now() + 8 * 3600 * 1000 };
+      const adminAccess: Access = { role: 'admin', actor: cleanActor, expires: Date.now() + 8 * 3600 * 1000, pic_name: cleanActor };
       setClientAccess(adminAccess);
+      if (typeof window !== 'undefined') localStorage.setItem('loop_active_pic_name', cleanActor);
       await refresh();
       toast.success(`Welcome back, ${cleanActor}`);
       return { ok: true };
@@ -292,6 +295,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
           };
           setClientAccess(resolvedAccess);
           if (resolvedAccess.customer_id) setSelectedCustomer(resolvedAccess.customer_id);
+          if (typeof window !== 'undefined') localStorage.setItem('loop_active_pic_name', cleanPicName);
         }
         await refresh();
         toast.success(`Welcome back, ${cleanPicName}`);
@@ -321,6 +325,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       };
       setClientAccess(customerAccess);
       setSelectedCustomer(target.id);
+      if (typeof window !== 'undefined') localStorage.setItem('loop_active_pic_name', cleanPicName);
       await refresh();
       toast.success(`Welcome back, ${cleanPicName || target.name}`);
       return { ok: true };
@@ -334,7 +339,10 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       await logoutFn();
     } catch {}
     setClientAccess(null);
-    if (typeof window !== 'undefined') localStorage.removeItem(STORAGE_KEY_AUTH);
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(STORAGE_KEY_AUTH);
+      localStorage.removeItem('loop_active_pic_name');
+    }
     setSelectedCustomer('all');
     await queryClient.invalidateQueries();
     toast.success('Signed out successfully.');
@@ -346,7 +354,11 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       toast.error('Authentication required. Please sign in to submit or edit feedback.');
       return;
     }
-    const parsed = itemSchema.parse(input);
+    const resolvedPicName = input.pic_name?.trim() || access?.pic_name || (typeof window !== 'undefined' ? localStorage.getItem('loop_active_pic_name') : null) || (access?.role === 'admin' ? access?.actor : null) || null;
+    const parsed = itemSchema.parse({
+      ...input,
+      pic_name: resolvedPicName,
+    });
     const nowIso = new Date().toISOString();
     const isCustomerActor = access?.role === 'customer';
 
@@ -360,14 +372,14 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         ...parsed,
         id: existing.id,
         version: (existing.version ?? 0) + 1,
-        report_date: parsed.report_date ?? existing.report_date ?? existing.updated_at.slice(0, 10),
+        report_date: parsed.report_date ?? existing.report_date ?? existing.updated_at,
         completion_date: parsed.activity === 'Done' ? existing.completion_date ?? todayWIB() : null,
         deleted_at: existing.deleted_at,
         updated_at: nowIso,
         actor: access?.actor ?? 'Editor',
         needs_review: isCustomerActor ? true : (parsed.needs_review ?? false),
         image: parsed.image !== undefined ? parsed.image : (existing.image ?? null),
-        pic_name: parsed.pic_name !== undefined ? parsed.pic_name : (existing.pic_name ?? null),
+        pic_name: resolvedPicName ?? existing.pic_name ?? null,
       };
       setItems(prev => prev.map(item => (item.id === existing.id ? updatedItem : item)));
       addHistoryEntry(
@@ -384,14 +396,14 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         ...parsed,
         id: tempId,
         version: 1,
-        report_date: parsed.report_date || todayWIB(),
+        report_date: parsed.report_date || nowIso,
         completion_date: parsed.activity === 'Done' ? todayWIB() : null,
         deleted_at: null,
         updated_at: nowIso,
         actor: access?.actor ?? (isCustomerActor ? 'Customer' : 'Editor'),
         needs_review: isCustomerActor ? true : (parsed.needs_review ?? false),
         image: parsed.image ?? null,
-        pic_name: parsed.pic_name ?? (isCustomerActor ? (access?.pic_name || null) : null),
+        pic_name: resolvedPicName,
       };
       setItems(prev => [newItem, ...prev]);
       addHistoryEntry(
@@ -827,7 +839,7 @@ function AccessDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="max-w-[430px]">
         <DialogTitle className="text-2xl font-medium">Welcome to Loop</DialogTitle>
-        <DialogDescription>Sign in to your feedback workspace.</DialogDescription>
+        <DialogDescription>Sign in to your ticketing workspace.</DialogDescription>
         <div className="login-tabs">
           <Button
             type="button"

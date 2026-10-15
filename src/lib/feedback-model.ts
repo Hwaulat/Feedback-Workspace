@@ -8,12 +8,13 @@ export const activitySchema = z
   .enum(['Done', 'In progress', 'Not started', 'Pending'])
   .transform(v => (v === 'Pending' ? 'Not started' : v) as 'Done' | 'In progress' | 'Not started');
 export const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(v => !Number.isNaN(Date.parse(v)) && new Date(v).toISOString().slice(0,10) === v).nullable();
+export const dateTimeSchema = z.string().refine(v => !Number.isNaN(Date.parse(v)), { message: 'Invalid date/time string' }).nullable();
 export const itemSchema = z.object({
   customer_id: z.string().uuid(), number: z.number().int().positive(),
   feature: z.string().trim().max(200), feedback: z.string().trim().min(1).max(1000),
   detail: z.string().max(5000), type: z.enum(types), category: z.enum(categories),
   status: z.enum(statuses), activity: activitySchema, notes: z.string().max(5000), estimated_date: dateSchema,
-  report_date: dateSchema.optional(),
+  report_date: dateTimeSchema.optional(),
   needs_review: z.boolean().optional(),
   image: z.string().nullable().optional(),
   pic_name: z.string().trim().max(100).nullable().optional(),
@@ -35,6 +36,18 @@ export type Customer = { id: string; name: string; active: boolean; pin_version:
 export type HistoryEntry = { id: string; customer_id: string | null; item_id: string | null; action: string; field: string; old_value: string | null; new_value: string | null; actor: string; created_at: string };
 export type Access = { role: 'admin' | 'customer'; actor: string; customer_id?: string; pin_version?: number; expires: number; pic_name?: string | null };
 export function todayWIB(now = new Date()) { return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jakarta', year:'numeric', month:'2-digit', day:'2-digit' }).format(now); }
+export function createActionReportDate(inputDate?: string | null, now = new Date()): string {
+  const nowIso = now.toISOString();
+  if (!inputDate) return nowIso;
+  const datePart = inputDate.slice(0, 10);
+  const today = todayWIB(now);
+  if (datePart === today) {
+    return nowIso;
+  }
+  const timeStr = now.toLocaleTimeString('en-GB', { timeZone: 'Asia/Jakarta', hour12: false });
+  const combined = new Date(`${datePart}T${timeStr}+07:00`);
+  return isNaN(combined.getTime()) ? nowIso : combined.toISOString();
+}
 export function isOverdue(item: Pick<FeedbackItem,'activity'|'estimated_date'>, today = todayWIB()) { return item.activity !== 'Done' && !!item.estimated_date && item.estimated_date < today; }
 export function completionDate(activity: string, oldActivity: string, oldDate: string | null, today: string) { return activity !== 'Done' ? null : oldActivity === 'Done' ? oldDate : today; }
 export function isNeedsUpdate(item: FeedbackItem, customers: Customer[] = []): boolean {

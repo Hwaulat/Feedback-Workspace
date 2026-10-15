@@ -100,47 +100,46 @@ export async function saveServerItem(
   const nowIso = new Date().toISOString();
 
   if (existingId) {
-    const idx = store.items.findIndex(i => i.id === existingId);
-    if (idx === -1) {
-      throw new Error('Feedback item not found.');
-    }
-    const current = store.items[idx]!;
-    const updated: FeedbackItem = {
-      ...item,
-      id: existingId,
-      version: (existingVersion ?? current.version ?? 0) + 1,
-      report_date: item.report_date ?? current.report_date ?? current.updated_at.slice(0, 10),
-      completion_date: item.activity === 'Done' ? (current.completion_date ?? todayWIB()) : null,
-      deleted_at: current.deleted_at,
-      updated_at: nowIso,
-      actor,
-      needs_review: isCustomer ? true : (item.needs_review ?? false),
-      image: item.image !== undefined ? item.image : (current.image ?? null),
-      pic_name: item.pic_name !== undefined ? item.pic_name : (current.pic_name ?? null),
-    };
-    store.items[idx] = updated;
+    const idx = store.items.findIndex(i => i.id === existingId || (i.customer_id === item.customer_id && i.number === item.number));
+    if (idx !== -1) {
+      const current = store.items[idx]!;
+      const updated: FeedbackItem = {
+        ...item,
+        id: current.id,
+        version: (existingVersion ?? current.version ?? 0) + 1,
+        report_date: item.report_date ?? current.report_date ?? current.updated_at,
+        completion_date: item.activity === 'Done' ? (current.completion_date ?? todayWIB()) : null,
+        deleted_at: current.deleted_at,
+        updated_at: nowIso,
+        actor,
+        needs_review: isCustomer ? true : (item.needs_review ?? false),
+        image: item.image !== undefined ? item.image : (current.image ?? null),
+        pic_name: item.pic_name !== undefined ? item.pic_name : (current.pic_name ?? null),
+      };
+      store.items[idx] = updated;
 
-    const histEntry: HistoryEntry = {
-      id: randomUUID(),
-      customer_id: item.customer_id,
-      item_id: existingId,
-      action: isCustomer ? 'Updated feedback (Customer)' : 'Updated feedback',
-      field: 'activity',
-      old_value: current.activity,
-      new_value: item.activity,
-      actor,
-      created_at: nowIso,
-    };
-    store.history.unshift(histEntry);
-    await writeServerStore(store);
-    return updated;
+      const histEntry: HistoryEntry = {
+        id: randomUUID(),
+        customer_id: item.customer_id,
+        item_id: current.id,
+        action: isCustomer ? 'Updated feedback (Customer)' : 'Updated feedback',
+        field: 'activity',
+        old_value: current.activity,
+        new_value: item.activity,
+        actor,
+        created_at: nowIso,
+      };
+      store.history.unshift(histEntry);
+      await writeServerStore(store);
+      return updated;
+    }
   }
 
   // New feedback
   const targetCustId = item.customer_id;
   const custActiveItems = store.items.filter(i => i.customer_id === targetCustId && !i.deleted_at);
   const maxActiveNum = custActiveItems.reduce((max, i) => Math.max(max, i.number || 0), 0);
-  const assignedNumber = isCustomer || !item.number ? maxActiveNum + 1 : item.number;
+  const assignedNumber = existingId && item.number ? item.number : (isCustomer || !item.number ? maxActiveNum + 1 : item.number);
 
   // Clean up any soft-deleted items with number >= assignedNumber for this customer
   store.items = store.items.filter(
@@ -151,9 +150,9 @@ export async function saveServerItem(
     ...item,
     customer_id: targetCustId,
     number: assignedNumber,
-    id: randomUUID(),
+    id: existingId || randomUUID(),
     version: 1,
-    report_date: item.report_date || todayWIB(),
+    report_date: item.report_date || nowIso,
     completion_date: item.activity === 'Done' ? todayWIB() : null,
     deleted_at: null,
     updated_at: nowIso,
@@ -162,7 +161,6 @@ export async function saveServerItem(
     image: item.image ?? null,
     pic_name: item.pic_name ?? null,
   };
-
   store.items.unshift(newItem);
   const histEntry: HistoryEntry = {
     id: randomUUID(),

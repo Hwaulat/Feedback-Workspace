@@ -86,7 +86,7 @@ function Shell() {
         <div className="workspace-switch">
           <span className="workspace-icon"><Building2 size={15} /></span>
           <div className="flex-1 min-w-0">
-            <strong className="font-medium workspace-title">Feedback workspace</strong>
+            <strong className="font-medium workspace-title">Ticketing Workspace</strong>
           </div>
         </div>
         <p className="sidebar-label">Workspace</p>

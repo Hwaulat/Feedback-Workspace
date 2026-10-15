@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { Plus, Search, Download, Trash2, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
-import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, fmtDate, fmtDateTime } from '@/components/feedback-views';
+import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, fmtDate, fmtDateTime, fmtReportDate } from '@/components/feedback-views';
 import { types, activities, statuses, isOverdue, parseImages, type FeedbackItem } from '@/lib/feedback-model';
 
 export const Route = createFileRoute('/feedback')({
@@ -37,6 +37,16 @@ function FeedbackPage() {
 
   const open = (item: FeedbackItem) => (canManage ? setEditing(item) : setDetail(item));
   const needsUpdateCount = items.filter(i => !i.deleted_at && i.needs_review).length;
+
+  const getPicDisplay = (item: FeedbackItem) => {
+    if (item.pic_name) return item.pic_name;
+    const cust = customers.find(c => c.id === item.customer_id);
+    if (item.actor && item.actor !== cust?.name && item.actor !== 'Internal team' && item.actor !== 'Loop Team' && item.actor !== 'Admin') {
+      return item.actor;
+    }
+    return null;
+  };
+
   return (
     <>
       <div className="page-heading">
@@ -68,11 +78,9 @@ function FeedbackPage() {
               <Download />Export by Excel ({rows.length})
             </Button>
           )}
-          {!viewTrash && (canManage ? (
-            <Button size="sm" onClick={() => setCreating(true)}><Plus />New feedback</Button>
-          ) : access?.role === 'customer' ? (
-            <Button size="sm" onClick={() => setCreating(true)}><Plus />Submit feedback</Button>
-          ) : null)}
+          {!viewTrash && (
+            <Button size="sm" onClick={() => setCreating(true)}><Plus />Submit Ticket</Button>
+          )}
         </div>
       </div>
       <div className="filters-line">
@@ -116,7 +124,7 @@ function FeedbackPage() {
           {items.length === 0 && (
             access ? (
               <Button size="sm" onClick={() => setCreating(true)}>
-                <Plus /> {access?.role === 'customer' ? 'Submit feedback' : 'Add new feedback'}
+                <Plus /> Submit Ticket
               </Button>
             ) : (
               <Button size="sm" onClick={openLogin}>
@@ -199,8 +207,8 @@ function FeedbackPage() {
                     </td>
                     <td style={{ width: 50, padding: '10px 8px' }}>{item.number}</td>
                     <td style={{ minWidth: 120 }}>
-                      {item.pic_name ? (
-                        <span className="font-medium text-foreground">{item.pic_name}</span>
+                      {getPicDisplay(item) ? (
+                        <span className="font-medium text-foreground">{getPicDisplay(item)}</span>
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
@@ -260,7 +268,7 @@ function FeedbackPage() {
                         <span className={`badge ${activityBadge(item.activity)}`}>{item.activity}</span>
                       )}
                     </td>
-                    <td>{fmtDate(item.report_date ?? item.updated_at.slice(0, 10))}</td>
+                    <td>{fmtReportDate(item.report_date, item.updated_at)}</td>
                     <td>{fmtDate(item.estimated_date)}{isOverdue(item) && <span className="badge major" style={{ marginLeft: 6 }}>Overdue</span>}</td>
                     <td title={fmtDateTime(item.updated_at)}>{fmtDate(item.updated_at)}</td>
                   </tr>
@@ -275,7 +283,7 @@ function FeedbackPage() {
                   <h3>{item.feedback}</h3>
                   <p>
                     {item.feature || '—'} · #{item.number}
-                    {item.pic_name && <span className="inline-block ml-1 font-medium text-primary">· PIC: {item.pic_name}</span>}
+                    {getPicDisplay(item) && <span className="inline-block ml-1 font-medium text-primary">· PIC: {getPicDisplay(item)}</span>}
                     {item.image && (
                       <span className="inline-image-badge" style={{ marginLeft: 6 }}>
                         📷 {parseImages(item.image).length > 1 ? `${parseImages(item.image).length} Images` : 'Attachment'}
@@ -348,7 +356,7 @@ function FeedbackPage() {
                   </>
                 )}
                 <span style={{ fontSize: 12, color: 'var(--muted-foreground)' }} title="Report date">
-                  Report: {fmtDate(item.report_date ?? item.updated_at.slice(0, 10))}
+                  Report: {fmtReportDate(item.report_date, item.updated_at)}
                 </span>
                 <time>{fmtDate(item.updated_at)}</time>
               </div>

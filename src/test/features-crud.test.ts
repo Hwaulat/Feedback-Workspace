@@ -14,6 +14,8 @@ import {
   parseImages,
   serializeImages,
   createActionReportDate,
+  STORAGE_KEY_SAVED_PICS,
+  persistSavedPicName,
   type FeedbackItem,
   type ItemInput,
   type Customer,
@@ -1072,6 +1074,78 @@ describe('Feature 19: Solid Badges for Feedback Types', () => {
     expect(typeBadge(undefined)).toBe('');
     expect(typeBadge('')).toBe('');
     expect(typeBadge('Unknown Type')).toBe('');
+  });
+});
+
+describe('Feature 20: Saved PIC Names for Customer Portal Login', () => {
+  it('defines STORAGE_KEY_SAVED_PICS constant', () => {
+    expect(STORAGE_KEY_SAVED_PICS).toBe('loop_saved_pic_names');
+  });
+
+  it('persists and deduplicates PIC names in localStorage with most recent first', () => {
+    localStorage.clear();
+
+    persistSavedPicName('Budi Santoso');
+    let saved = JSON.parse(localStorage.getItem(STORAGE_KEY_SAVED_PICS) || '[]');
+    expect(saved).toEqual(['Budi Santoso']);
+
+    // Adding another name puts it at the front
+    persistSavedPicName('Siti Rahma');
+    saved = JSON.parse(localStorage.getItem(STORAGE_KEY_SAVED_PICS) || '[]');
+    expect(saved).toEqual(['Siti Rahma', 'Budi Santoso']);
+
+    // Re-adding existing name moves it to the front without duplicates (case-insensitive)
+    persistSavedPicName('budi santoso');
+    saved = JSON.parse(localStorage.getItem(STORAGE_KEY_SAVED_PICS) || '[]');
+    expect(saved).toEqual(['budi santoso', 'Siti Rahma']);
+  });
+
+  it('filters out empty names and system actor names from being saved as PIC', () => {
+    localStorage.clear();
+
+    persistSavedPicName('   ');
+    persistSavedPicName(null);
+    persistSavedPicName(undefined);
+    persistSavedPicName('Loop Team');
+    persistSavedPicName('Admin');
+    persistSavedPicName('Internal team');
+    persistSavedPicName('customer');
+
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY_SAVED_PICS) || '[]');
+    expect(saved).toEqual([]);
+  });
+
+  it('aggregates unique PIC names from saved storage and items', () => {
+    localStorage.clear();
+    persistSavedPicName('Andi Wijaya');
+
+    const testItems: Array<{ pic_name?: string | null }> = [
+      { pic_name: 'Budi Santoso' },
+      { pic_name: 'Andi Wijaya' }, // duplicate of saved
+      { pic_name: 'Siti Rahma' },
+      { pic_name: null },
+      { pic_name: '   ' },
+    ];
+
+    const list: string[] = [];
+    const seen = new Set<string>();
+    const add = (val: unknown) => {
+      if (typeof val !== 'string') return;
+      const clean = val.trim();
+      if (!clean) return;
+      const lower = clean.toLowerCase();
+      if (['loop team', 'admin', 'internal team', 'excel import', 'customer'].includes(lower)) return;
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        list.push(clean);
+      }
+    };
+
+    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY_SAVED_PICS) || '[]');
+    stored.forEach(add);
+    testItems.forEach(i => { if (i.pic_name) add(i.pic_name); });
+
+    expect(list).toEqual(['Andi Wijaya', 'Budi Santoso', 'Siti Rahma']);
   });
 });
 

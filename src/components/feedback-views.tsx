@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { useWorkspace } from './feedback-provider';
 import { Button } from '@/components/ui/button';
 import { X, Trash2, RotateCcw, ShieldCheck, Image as ImageIcon, Pencil, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { types, categories, statuses, activities, todayWIB, createActionReportDate, parseImages, serializeImages, type Customer, type FeedbackItem, type ItemInput } from '@/lib/feedback-model';
+import { types, categories, statuses, activities, todayWIB, createActionReportDate, parseImages, serializeImages, persistSavedPicName, type Customer, type FeedbackItem, type ItemInput } from '@/lib/feedback-model';
 
 export const activityBadge = (a: string) => (a === 'Done' ? 'done' : a === 'In progress' ? 'progress' : 'pending');
 export const categoryBadge = (c: string) => (c === 'Major' ? 'major' : c === 'Medium' ? 'medium' : '');
@@ -1176,6 +1176,11 @@ export function FormModal({
         } catch {}
       }
 
+      const finalPicName = form.pic_name?.trim() || activePic || null;
+      if (finalPicName) {
+        persistSavedPicName(finalPicName);
+      }
+
       await save({
         ...form,
         customer_id: finalCustId,
@@ -1185,7 +1190,7 @@ export function FormModal({
         feedback: form.feedback.trim(),
         detail: form.detail.trim(),
         image: form.image || null,
-        pic_name: form.pic_name?.trim() || activePic || null,
+        pic_name: finalPicName,
         type: isCustomer ? (item ? form.type : 'Bug Report') : form.type,
         category: isCustomer ? (item ? form.category : 'Minor') : form.category,
         status: isCustomer ? (item ? form.status : 'Waiting') : form.status,

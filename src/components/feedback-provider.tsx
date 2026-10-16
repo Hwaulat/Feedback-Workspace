@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
 import { queryOptions, useQueryClient, useSuspenseQuery, useQuery } from '@tanstack/react-query';
 import { useServerFn } from '@tanstack/react-start';
 import {
@@ -23,6 +23,8 @@ import {
   type ItemInput,
   todayWIB,
   PIN_PATTERN,
+  STORAGE_KEY_SAVED_PICS,
+  persistSavedPicName,
 } from '@/lib/feedback-model';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -296,6 +298,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
           setClientAccess(resolvedAccess);
           if (resolvedAccess.customer_id) setSelectedCustomer(resolvedAccess.customer_id);
           if (typeof window !== 'undefined') localStorage.setItem('loop_active_pic_name', cleanPicName);
+          persistSavedPicName(cleanPicName);
         }
         await refresh();
         toast.success(`Welcome back, ${cleanPicName}`);
@@ -326,6 +329,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       setClientAccess(customerAccess);
       setSelectedCustomer(target.id);
       if (typeof window !== 'undefined') localStorage.setItem('loop_active_pic_name', cleanPicName);
+      persistSavedPicName(cleanPicName);
       await refresh();
       toast.success(`Welcome back, ${cleanPicName || target.name}`);
       return { ok: true };
@@ -778,7 +782,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       }}
     >
       {children}
-      <AccessDialog open={loginOpen} setOpen={setLoginOpen} onAdminLogin={loginAdmin} onCustomerLogin={loginCustomer} />
+      <AccessDialog open={loginOpen} setOpen={setLoginOpen} onAdminLogin={loginAdmin} onCustomerLogin={loginCustomer} items={items} />
       <ClearDataDialog open={clearOpen} setOpen={setClearOpen} onConfirm={clearAllData} />
     </Context.Provider>
   );
@@ -789,11 +793,13 @@ function AccessDialog({
   setOpen,
   onAdminLogin,
   onCustomerLogin,
+  items,
 }: {
   open: boolean;
   setOpen: (v: boolean) => void;
   onAdminLogin: (passcode: string, actor: string) => Promise<{ ok: boolean; error?: string }>;
   onCustomerLogin: (pin: string, picName?: string) => Promise<{ ok: boolean; error?: string }>;
+  items?: FeedbackItem[];
 }) {
   const [mode, setMode] = useState<'customer' | 'admin'>('admin');
   const [passcode, setPasscode] = useState('');
@@ -802,6 +808,48 @@ function AccessDialog({
   const [visible, setVisible] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  // Collect all unique PIC names from localStorage and workspace items
+  const savedPicNames = useMemo(() => {
+    const list: string[] = [];
+    const seen = new Set<string>();
+
+    const add = (val: unknown) => {
+      if (typeof val !== 'string') return;
+      const clean = val.trim();
+      if (!clean) return;
+      const lower = clean.toLowerCase();
+      if (['loop team', 'admin', 'internal team', 'excel import', 'customer'].includes(lower)) return;
+      if (!seen.has(lower)) {
+        seen.add(lower);
+        list.push(clean);
+      }
+    };
+
+    try {
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(STORAGE_KEY_SAVED_PICS);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(add);
+          }
+        }
+        const activePic = localStorage.getItem('loop_active_pic_name');
+        if (activePic) add(activePic);
+      }
+    } catch {}
+
+    const sourceItems: FeedbackItem[] = items && items.length > 0
+      ? items
+      : (typeof window !== 'undefined' ? loadFromStorage<FeedbackItem[]>(STORAGE_KEY_ITEMS, []) : []);
+
+    sourceItems.forEach(i => {
+      if (i.pic_name) add(i.pic_name);
+    });
+
+    return list;
+  }, [items, open, mode]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -819,11 +867,13 @@ function AccessDialog({
           setError('Please enter your PIC Name.');
           return;
         }
-        const res = await onCustomerLogin(passcode, picName.trim());
+        const cleanPic = picName.trim();
+        const res = await onCustomerLogin(passcode, cleanPic);
         if (!res.ok) {
           setError(res.error ?? 'Invalid 6-digit PIN.');
           return;
         }
+        persistSavedPicName(cleanPic);
       }
       setPasscode('');
       setPicName('');
@@ -874,18 +924,82 @@ function AccessDialog({
               <p className="login-copy">
                 Enter your PIC Name and 6-digit customer PIN to view your feedback progress.
               </p>
-              <label className="form-field mb-4">
-                PIC Name
-                <input
-                  required
-                  maxLength={100}
-                  value={picName}
-                  onChange={e => setPicName(e.target.value)}
-                  placeholder="e.g. Budi Santoso"
-                  autoComplete="name"
-                  autoFocus
-                />
-              </label>
+              <div className="form-field mb-4">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                  <label style={{ fontSize: 14, fontWeight: 500 }}>PIC Name</label>
+                  {savedPicNames.length > 0 && (
+                    <span style={{ fontSize: 12, color: 'var(--muted-foreground)', fontWeight: 400 }}>
+                      {savedPicNames.length} saved PIC{savedPicNames.length > 1 ? 's' : ''} available
+                    </span>
+                  )}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <input
+                    list="pic-suggestions-list"
+                    required
+                    maxLength={100}
+                    value={picName}
+                    onChange={e => setPicName(e.target.value)}
+                    placeholder={savedPicNames.length > 0 ? "Select from saved PICs or type a name..." : "e.g. Budi Santoso"}
+                    autoComplete="name"
+                    autoFocus
+                    style={{ width: '100%' }}
+                  />
+                  {savedPicNames.length > 0 && (
+                    <select
+                      className="filter-select"
+                      value=""
+                      onChange={e => {
+                        if (e.target.value) {
+                          setPicName(e.target.value);
+                        }
+                      }}
+                      style={{
+                        width: '100%',
+                        fontSize: '13px',
+                        height: 38,
+                      }}
+                      title="Pick a previously entered PIC name"
+                      aria-label="Pick a previously entered PIC name"
+                    >
+                      <option value="">▼ Saved PICs ({savedPicNames.length})</option>
+                      {savedPicNames.map(name => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <datalist id="pic-suggestions-list">
+                  {savedPicNames.map(name => (
+                    <option key={name} value={name} />
+                  ))}
+                </datalist>
+                {savedPicNames.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+                    <span style={{ fontSize: 12, color: 'var(--muted-foreground)', alignSelf: 'center' }}>Recent:</span>
+                    {savedPicNames.slice(0, 4).map(name => (
+                      <button
+                        type="button"
+                        key={name}
+                        onClick={() => setPicName(name)}
+                        style={{
+                          fontSize: 12,
+                          padding: '2px 8px',
+                          borderRadius: 12,
+                          border: picName === name ? '1px solid var(--primary)' : '1px solid var(--border)',
+                          background: picName === name ? 'var(--primary)' : 'var(--secondary)',
+                          color: picName === name ? 'var(--primary-foreground)' : 'var(--foreground)',
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                        title={`Click to use "${name}"`}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </>
           )}
           {mode === 'admin' && (

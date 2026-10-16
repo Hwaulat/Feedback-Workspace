@@ -85,3 +85,22 @@ export function serializeImages(images: string[]): string | null {
   if (filtered.length === 1) return filtered[0]!;
   return JSON.stringify(filtered);
 }
+
+export const STORAGE_KEY_SAVED_PICS = 'loop_saved_pic_names';
+
+export function persistSavedPicName(name?: string | null) {
+  if (!name) return;
+  const clean = name.trim();
+  if (!clean) return;
+  const lower = clean.toLowerCase();
+  if (['loop team', 'admin', 'internal team', 'excel import', 'customer'].includes(lower)) return;
+  try {
+    if (typeof window !== 'undefined') {
+      const raw = localStorage.getItem(STORAGE_KEY_SAVED_PICS);
+      const list: string[] = raw ? JSON.parse(raw) : [];
+      const filtered = list.filter(n => typeof n === 'string' && n.trim().toLowerCase() !== lower);
+      filtered.unshift(clean);
+      localStorage.setItem(STORAGE_KEY_SAVED_PICS, JSON.stringify(filtered.slice(0, 50)));
+    }
+  } catch {}
+}

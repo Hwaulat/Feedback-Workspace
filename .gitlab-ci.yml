@@ -63,7 +63,7 @@ deploy:vm:
 
         echo '[+] Updating DOCKER_IMAGE_TAG to ${DOCKER_IMAGE_TAG} in .env...'
         if grep -q '^DOCKER_IMAGE_TAG=' .env; then
-          sed -i 's/^DOCKER_IMAGE_TAG=.*/DOCKER_IMAGE_TAG=\"${DOCKER_IMAGE_TAG}\"/' .env
+          sed -i 's|^DOCKER_IMAGE_TAG=.*|DOCKER_IMAGE_TAG=\"${DOCKER_IMAGE_TAG}\"|' .env
         else
           echo 'DOCKER_IMAGE_TAG=\"${DOCKER_IMAGE_TAG}\"' >> .env
         fi

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { Plus, Search, Download, Trash2, RotateCcw, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle } from 'lucide-react';
+import { Plus, Search, Download, Trash2, RotateCcw, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle, CheckCircle2, Hourglass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useWorkspace } from '@/components/feedback-provider';
@@ -60,6 +60,49 @@ function FeedbackPage() {
     return map;
   }, [customers, items]);
 
+  const totalCrDone = useMemo(() => {
+    return items.filter(
+      i =>
+        !i.deleted_at &&
+        (selectedCustomer === 'all' || i.customer_id === selectedCustomer) &&
+        ((i.type || '').toLowerCase().includes('change') || (i.type || '').toLowerCase().includes('cr')) &&
+        i.activity === 'Done'
+    ).length;
+  }, [items, selectedCustomer]);
+
+  const totalCrNotStarted = useMemo(() => {
+    return items.filter(
+      i =>
+        !i.deleted_at &&
+        (selectedCustomer === 'all' || i.customer_id === selectedCustomer) &&
+        ((i.type || '').toLowerCase().includes('change') || (i.type || '').toLowerCase().includes('cr')) &&
+        (i.activity === 'Not started' || (i.activity as string) === 'Pending')
+    ).length;
+  }, [items, selectedCustomer]);
+
+  const isCrDoneFilterActive = type === 'Change Request' && activity === 'Done';
+  const isCrNotStartedFilterActive = type === 'Change Request' && activity === 'Not started';
+
+  const handleToggleCrDoneFilter = () => {
+    if (isCrDoneFilterActive) {
+      setType('all');
+      setActivity('all');
+    } else {
+      setType('Change Request');
+      setActivity('Done');
+    }
+  };
+
+  const handleToggleCrNotStartedFilter = () => {
+    if (isCrNotStartedFilterActive) {
+      setType('all');
+      setActivity('all');
+    } else {
+      setType('Change Request');
+      setActivity('Not started');
+    }
+  };
+
   const handleDownloadCR = () => {
     if (selectedCustomer === 'all') {
       setPromptSelectedCustomer('');
@@ -99,6 +142,54 @@ function FeedbackPage() {
           <p>{viewTrash ? 'Review deleted feedback items and restore them anytime.' : (canManage ? 'Track, update and close out customer feedback.' : 'Progress and updates for your feedback.')}</p>
         </div>
         <div className="heading-actions">
+          {!viewTrash && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleToggleCrDoneFilter}
+                className={`badge done transition-all ${isCrDoneFilterActive ? 'ring-2 ring-emerald-500 shadow-sm' : 'hover:opacity-85'}`}
+                style={{
+                  height: 32,
+                  minHeight: 32,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '0 10px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  border: isCrDoneFilterActive ? '1px solid var(--success)' : undefined,
+                }}
+                title={isCrDoneFilterActive ? 'Filter aktif: CR Done (Klik untuk reset filter)' : 'Total Change Request (CR) status Done (Klik untuk filter)'}
+              >
+                <CheckCircle2 size={13} style={{ flexShrink: 0 }} />
+                <span>CR Done: {totalCrDone}</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleCrNotStartedFilter}
+                className={`badge pending transition-all ${isCrNotStartedFilterActive ? 'ring-2 ring-red-500 shadow-sm' : 'hover:opacity-85'}`}
+                style={{
+                  height: 32,
+                  minHeight: 32,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: '0 10px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  border: isCrNotStartedFilterActive ? '1px solid rgba(239, 68, 68, 0.4)' : undefined,
+                }}
+                title={isCrNotStartedFilterActive ? 'Filter aktif: CR Not Started (Klik untuk reset filter)' : 'Total Change Request (CR) status Not Started (Klik untuk filter)'}
+              >
+                <Hourglass size={13} style={{ flexShrink: 0 }} />
+                <span>CR Not Started: {totalCrNotStarted}</span>
+              </button>
+            </div>
+          )}
           {canManage && trashCount > 0 && (
             <Button
               variant={viewTrash ? 'secondary' : 'outline'}

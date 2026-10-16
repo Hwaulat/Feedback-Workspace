@@ -289,8 +289,8 @@ select {
 .metric-tertiary-btn:hover { text-decoration:underline; opacity:0.85; }
 .success { color:var(--success); } .info { color:var(--info); } .warning { color:var(--warning); } .danger { color:var(--danger); }
 .metric-icon.success { background:var(--success-soft); } .metric-icon.info { background:var(--info-soft); } .metric-icon.warning { background:var(--warning-soft); } .metric-icon.danger { background:var(--danger-soft); }
-.charts-grid { display:grid; grid-template-columns:1.12fr 1fr 1fr; gap:18px; margin-bottom:29px; }
-.chart-panel { border:1px solid var(--border); border-radius:7px; padding:21px 21px 17px; min-height:255px; }
+.charts-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:18px; margin-bottom:29px; width:100%; }
+.chart-panel { border:1px solid var(--border); border-radius:7px; padding:21px 21px 17px; min-height:255px; width:100%; box-sizing:border-box; display:flex; flex-direction:column; justify-content:space-between; }
 .panel-heading { display:flex; justify-content:space-between; gap:12px; align-items:center; margin-bottom:7px; }
 .panel-heading h2 { font-weight:500;font-size:15px;margin:0; }
 .panel-subtitle { color:var(--muted-foreground); font-size:12px; margin:0; }

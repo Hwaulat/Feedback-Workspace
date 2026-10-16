@@ -14,7 +14,7 @@ export const Route = createFileRoute('/')({
 function Overview() {
   const { access, demo, customers, items, selectedCustomer, setSelectedCustomer, exportToExcel } = useWorkspace();
   const [detail, setDetail] = useState<FeedbackItem | null>(null);
-  const [popupCategory, setPopupCategory] = useState<'all' | 'done' | 'inprogress' | 'notstarted' | 'changerequest' | 'overdue' | 'review_status' | 'needs_update' | 'updated' | null>(null);
+  const [popupCategory, setPopupCategory] = useState<'all' | 'done' | 'inprogress' | 'notstarted' | 'changerequest' | 'overdue' | 'review_status' | 'needs_update' | 'updated' | 'status' | 'status_execution' | 'status_waiting' | 'status_notes' | null>(null);
   const [modalReviewFilter, setModalReviewFilter] = useState<'all' | 'needs_update' | 'updated'>('all');
   const [modalTypeFilter, setModalTypeFilter] = useState<string>('all');
   const [modalCategoryFilter, setModalCategoryFilter] = useState<string>('all');
@@ -22,7 +22,7 @@ function Overview() {
   const [modalActivityFilter, setModalActivityFilter] = useState<string>('all');
   const [modalSearch, setModalSearch] = useState<string>('');
 
-  const openPopup = (cat: 'all' | 'done' | 'inprogress' | 'notstarted' | 'changerequest' | 'overdue' | 'review_status' | 'needs_update' | 'updated') => {
+  const openPopup = (cat: 'all' | 'done' | 'inprogress' | 'notstarted' | 'changerequest' | 'overdue' | 'review_status' | 'needs_update' | 'updated' | 'status' | 'status_execution' | 'status_waiting' | 'status_notes') => {
     setPopupCategory(cat);
     setModalSearch('');
     setModalCategoryFilter('all');
@@ -52,6 +52,21 @@ function Overview() {
       setModalReviewFilter('all');
       setModalTypeFilter('all');
       setModalActivityFilter('Not started');
+    } else if (cat === 'status_execution') {
+      setModalReviewFilter('all');
+      setModalTypeFilter('all');
+      setModalStatusFilter('Execution');
+      setModalActivityFilter('all');
+    } else if (cat === 'status_waiting') {
+      setModalReviewFilter('all');
+      setModalTypeFilter('all');
+      setModalStatusFilter('Waiting');
+      setModalActivityFilter('all');
+    } else if (cat === 'status_notes') {
+      setModalReviewFilter('all');
+      setModalTypeFilter('all');
+      setModalStatusFilter('Execution by notes');
+      setModalActivityFilter('all');
     } else {
       setModalReviewFilter('all');
       setModalTypeFilter('all');
@@ -61,6 +76,10 @@ function Overview() {
 
   const defaultReviewFilter = popupCategory === 'needs_update' ? 'needs_update' : popupCategory === 'updated' ? 'updated' : 'all';
   const defaultTypeFilter = popupCategory === 'changerequest' ? 'Change Request' : 'all';
+  const defaultStatusFilter =
+    popupCategory === 'status_execution' ? 'Execution' :
+    popupCategory === 'status_waiting' ? 'Waiting' :
+    popupCategory === 'status_notes' ? 'Execution by notes' : 'all';
   const defaultActivityFilter =
     popupCategory === 'done' ? 'Done' : popupCategory === 'inprogress' ? 'In progress' : popupCategory === 'notstarted' ? 'Not started' : 'all';
 
@@ -68,7 +87,7 @@ function Overview() {
     modalReviewFilter !== defaultReviewFilter ||
     (popupCategory !== 'changerequest' && modalTypeFilter !== defaultTypeFilter) ||
     modalCategoryFilter !== 'all' ||
-    modalStatusFilter !== 'all' ||
+    modalStatusFilter !== defaultStatusFilter ||
     modalActivityFilter !== defaultActivityFilter ||
     modalSearch.trim().length > 0;
 
@@ -76,7 +95,7 @@ function Overview() {
     setModalReviewFilter(defaultReviewFilter);
     setModalTypeFilter(defaultTypeFilter);
     setModalCategoryFilter('all');
-    setModalStatusFilter('all');
+    setModalStatusFilter(defaultStatusFilter);
     setModalActivityFilter(defaultActivityFilter);
     setModalSearch('');
   };
@@ -142,6 +161,10 @@ function Overview() {
     value: active.filter(i => i.category === c).length,
   }));
 
+  const statusExecution = active.filter(i => i.status === 'Execution').length;
+  const statusWaiting = active.filter(i => i.status === 'Waiting').length;
+  const statusExecutionNotes = active.filter(i => i.status === 'Execution by notes').length;
+
   const C = 2 * Math.PI * 48;
   const segs = [
     { label: 'Done', value: done, color: '#10B981', cls: 'chart-success' },
@@ -149,7 +172,11 @@ function Overview() {
     { label: 'Not started', value: notStarted, color: '#EF4444', cls: 'chart-danger' },
   ].filter(s => s.value > 0);
 
-  let acc = 0;
+  const statusSegs = [
+    { label: 'Execution', value: statusExecution, color: '#10B981', cls: 'status-execution' },
+    { label: 'Waiting', value: statusWaiting, color: '#EA580C', cls: 'status-waiting' },
+    { label: 'Execution by notes', value: statusExecutionNotes, color: '#0284C7', cls: 'status-execution-notes' },
+  ].filter(s => s.value > 0);
 
   const popupData = useMemo(() => {
     if (!popupCategory) return null;
@@ -213,6 +240,34 @@ function Overview() {
         items: active.filter(i => !isNeedsUpdate(i, customers)),
       };
     }
+    if (popupCategory === 'status') {
+      return {
+        title: 'Feedback by Status',
+        subtitle: `Total ${total} feedback items: ${statusExecution} Execution · ${statusWaiting} Waiting · ${statusExecutionNotes} Execution by notes`,
+        items: active,
+      };
+    }
+    if (popupCategory === 'status_execution') {
+      return {
+        title: 'Execution Status Feedback',
+        subtitle: `List of feedback items currently in Execution status (${statusExecution} items)`,
+        items: active.filter(i => i.status === 'Execution'),
+      };
+    }
+    if (popupCategory === 'status_waiting') {
+      return {
+        title: 'Waiting Status Feedback',
+        subtitle: `List of feedback items currently in Waiting status (${statusWaiting} items)`,
+        items: active.filter(i => i.status === 'Waiting'),
+      };
+    }
+    if (popupCategory === 'status_notes') {
+      return {
+        title: 'Execution by Notes Feedback',
+        subtitle: `List of feedback items with Execution by notes status (${statusExecutionNotes} items)`,
+        items: active.filter(i => i.status === 'Execution by notes'),
+      };
+    }
     if (popupCategory === 'all') {
       return {
         title: 'All Feedback Items',
@@ -221,7 +276,7 @@ function Overview() {
       };
     }
     return null;
-  }, [popupCategory, active, updatedCount, needsUpdateCount, total, customers]);
+  }, [popupCategory, active, updatedCount, needsUpdateCount, total, customers, statusExecution, statusWaiting, statusExecutionNotes]);
 
   const modalFilteredItems = useMemo(() => {
     if (!popupCategory || !popupData) return [];
@@ -493,6 +548,7 @@ function Overview() {
       </div>
 
       <div className="charts-grid">
+        {/* Activity status pie chart */}
         <div className="chart-panel">
           <div className="panel-heading">
             <h2>Activity status</h2>
@@ -503,25 +559,28 @@ function Overview() {
               <svg viewBox="0 0 120 120">
                 <circle className="donut-track" cx="60" cy="60" r="48" fill="none" strokeWidth="16" />
                 {total > 0 &&
-                  segs.map(s => {
-                    const len = (C * s.value) / total;
-                    const strokeOffset = -acc;
-                    acc += len;
-                    return (
-                      <circle
-                        key={s.label}
-                        className={`donut-segment ${s.cls}`}
-                        cx="60"
-                        cy="60"
-                        r="48"
-                        fill="none"
-                        stroke={s.color}
-                        strokeWidth="16"
-                        strokeDasharray={`${len} ${C - len}`}
-                        strokeDashoffset={strokeOffset}
-                      />
-                    );
-                  })}
+                  (() => {
+                    let actAcc = 0;
+                    return segs.map(s => {
+                      const len = (C * s.value) / total;
+                      const strokeOffset = -actAcc;
+                      actAcc += len;
+                      return (
+                        <circle
+                          key={s.label}
+                          className={`donut-segment ${s.cls}`}
+                          cx="60"
+                          cy="60"
+                          r="48"
+                          fill="none"
+                          stroke={s.color}
+                          strokeWidth="16"
+                          strokeDasharray={`${len} ${C - len}`}
+                          strokeDashoffset={strokeOffset}
+                        />
+                      );
+                    });
+                  })()}
               </svg>
               <div className="donut-center">
                 {total}
@@ -530,13 +589,19 @@ function Overview() {
             </div>
             <div className="chart-legend">
               {[
-                { l: 'Done', v: done, color: '#10B981' },
-                { l: 'In progress', v: progress, color: '#02A9EA' },
-                { l: 'Not started', v: notStarted, color: '#EF4444' },
+                { l: 'Done', v: done, color: '#10B981', cat: 'done' },
+                { l: 'In progress', v: progress, color: '#02A9EA', cat: 'inprogress' },
+                { l: 'Not started', v: notStarted, color: '#EF4444', cat: 'notstarted' },
               ].map(s => (
-                <div className="legend-row" key={s.l}>
+                <div
+                  className="legend-row"
+                  key={s.l}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => openPopup(s.cat as any)}
+                  title={`View ${s.l} feedback`}
+                >
                   <span className="legend-dot" style={{ backgroundColor: s.color }} />
-                  {s.l}
+                  <span>{s.l}</span>
                   <strong>{s.v}</strong>
                 </div>
               ))}
@@ -544,6 +609,68 @@ function Overview() {
           </div>
         </div>
 
+        {/* Status pie chart — positioned right next to Activity status */}
+        <div className="chart-panel">
+          <div className="panel-heading">
+            <h2>Status</h2>
+            <p className="panel-subtitle">{total} feedback items</p>
+          </div>
+          <div className="donut-layout">
+            <div className="donut" role="img" aria-label="Status breakdown">
+              <svg viewBox="0 0 120 120">
+                <circle className="donut-track" cx="60" cy="60" r="48" fill="none" strokeWidth="16" />
+                {total > 0 &&
+                  (() => {
+                    let statAcc = 0;
+                    return statusSegs.map(s => {
+                      const len = (C * s.value) / total;
+                      const strokeOffset = -statAcc;
+                      statAcc += len;
+                      return (
+                        <circle
+                          key={s.label}
+                          className="donut-segment"
+                          cx="60"
+                          cy="60"
+                          r="48"
+                          fill="none"
+                          stroke={s.color}
+                          strokeWidth="16"
+                          strokeDasharray={`${len} ${C - len}`}
+                          strokeDashoffset={strokeOffset}
+                        />
+                      );
+                    });
+                  })()}
+              </svg>
+              <div className="donut-center">
+                {total}
+                <small>total items</small>
+              </div>
+            </div>
+            <div className="chart-legend">
+              {[
+                { l: 'Execution', v: statusExecution, color: '#10B981', cat: 'status_execution' },
+                { l: 'Waiting', v: statusWaiting, color: '#EA580C', cat: 'status_waiting' },
+                { l: 'Execution by notes', v: statusExecutionNotes, color: '#0284C7', cat: 'status_notes' },
+              ].map(s => (
+                <div
+                  className="legend-row"
+                  key={s.l}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => openPopup(s.cat as any)}
+                  title={`View ${s.l} feedback`}
+                >
+                  <span className="legend-dot" style={{ backgroundColor: s.color }} />
+                  <span>{s.l}</span>
+                  <strong>{s.v}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Feedback by type bar chart */}
         <div className="chart-panel">
           <div className="panel-heading">
             <h2>Feedback by type</h2>
@@ -570,6 +697,7 @@ function Overview() {
           </div>
         </div>
 
+        {/* Category breakdown */}
         <div className="chart-panel">
           <div className="panel-heading">
             <h2>Category breakdown</h2>

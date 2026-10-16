@@ -1,6 +1,4 @@
 default:
-  environment:
-    name: main
   tags:
     - dev
 

@@ -349,6 +349,17 @@ function Overview() {
     customers,
   ]);
 
+  const modalDoneCount = useMemo(() => {
+    return modalFilteredItems.filter(i => i.activity === 'Done').length;
+  }, [modalFilteredItems]);
+
+  const modalNotStartedCount = useMemo(() => {
+    return modalFilteredItems.filter(i => {
+      const act = (i.activity as string) === 'Pending' ? 'Not started' : i.activity;
+      return act === 'Not started';
+    }).length;
+  }, [modalFilteredItems]);
+
   return (
     <>
       <div className="page-heading">
@@ -983,7 +994,7 @@ function Overview() {
         <div className="modal-overlay" onClick={e => { if (e.target === e.currentTarget) setPopupCategory(null); }}>
           <div className="modal" style={{ width: 1200, maxWidth: '96vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column' }}>
             <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <h2>{popupData.title}</h2>
                 <span className="badge" style={{ fontSize: 13, background: '#02A9EA', color: '#ffffff', fontWeight: 600 }}>
                   {modalFilteredItems.length} items
@@ -994,9 +1005,43 @@ function Overview() {
                   </span>
                 )}
               </div>
-              <Button variant="ghost" size="icon" aria-label="Close" onClick={() => setPopupCategory(null)}>
-                <X size={16} />
-              </Button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <span
+                  className="badge done"
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: '4px 9px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    borderRadius: 6,
+                  }}
+                  title="Total Done in this list"
+                >
+                  <CheckCircle2 size={13} style={{ flexShrink: 0 }} />
+                  Done: {modalDoneCount}
+                </span>
+                <span
+                  className="badge pending"
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 600,
+                    padding: '4px 9px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    borderRadius: 6,
+                  }}
+                  title="Total Not Started in this list"
+                >
+                  <Hourglass size={13} style={{ flexShrink: 0 }} />
+                  Not Started: {modalNotStartedCount}
+                </span>
+                <Button variant="ghost" size="icon" aria-label="Close" onClick={() => setPopupCategory(null)}>
+                  <X size={16} />
+                </Button>
+              </div>
             </div>
             <p className="text-muted-foreground text-sm" style={{ margin: '-14px 0 12px' }}>
               {popupData.subtitle}
@@ -1004,7 +1049,7 @@ function Overview() {
 
             {/* Filter bar: Search, Review Status, Type, Category, Status, Activity */}
             <div className="modal-filter-bar">
-              <div className="modal-filter-group" style={{ minWidth: 200, maxWidth: 300, flex: 1 }}>
+              <div className="modal-filter-group" style={{ minWidth: 200, flex: 1 }}>
                 <label htmlFor="modal-search" className="modal-filter-label">Search</label>
                 <div style={{ position: 'relative', width: '100%' }}>
                   <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted-foreground)', pointerEvents: 'none' }} />
@@ -1012,7 +1057,7 @@ function Overview() {
                     id="modal-search"
                     type="search"
                     className="modal-filter-search"
-                    style={{ paddingLeft: 28 }}
+                    style={{ paddingLeft: 28, width: '100%' }}
                     placeholder="Search feedback, feature, PIC..."
                     value={modalSearch}
                     onChange={e => setModalSearch(e.target.value)}

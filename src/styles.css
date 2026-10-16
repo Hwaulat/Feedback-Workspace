@@ -517,7 +517,7 @@ select {
 }
 .modal-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:22px; }
 .modal-header h2 { font-size:23px;font-weight:500;margin:0; }
-.modal-filter-bar { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; padding:10px 12px; background:var(--surface-subtle); border:1px solid var(--border); border-radius:6px; margin-bottom:14px; }
+.modal-filter-bar { display:flex; align-items:flex-end; gap:8px; flex-wrap:wrap; padding:10px 12px; background:var(--surface-subtle); border:1px solid var(--border); border-radius:6px; margin-bottom:14px; width:100%; box-sizing:border-box; }
 .modal-filter-group { display:flex; flex-direction:column; gap:3px; }
 .modal-filter-label { font-size:11px; font-weight:600; color:var(--muted-foreground); text-transform:uppercase; letter-spacing:0.04em; }
 .modal-filter-select {

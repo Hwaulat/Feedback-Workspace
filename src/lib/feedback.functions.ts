@@ -1,6 +1,8 @@
 import { createServerFn } from '@tanstack/react-start';
 import { z } from 'zod';
 import { randomInt } from 'node:crypto';
+
+
 import {
   itemSchema,
   PIN_PATTERN,
@@ -45,9 +47,10 @@ export const signIn = createServerFn({ method: 'POST' })
       .parse(v),
   )
   .handler(async ({ data }) => {
-    const { session, pinHash, attemptKeys } = await import('./feedback-session.server');
+    const { session, pinHash, attemptKeys, getRequiredSecret } = await import('./feedback-session.server');
     const s = await session();
-    const keys = attemptKeys();
+    const targetIdentifier = data.mode === 'admin' ? 'admin' : (data.pic_name || data.actor || undefined);
+    const keys = attemptKeys(targetIdentifier);
 
     try {
       const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
@@ -55,12 +58,12 @@ export const signIn = createServerFn({ method: 'POST' })
       if (attempts?.some(a => a.locked_until && Date.parse(a.locked_until) > Date.now())) {
         return { ok: false, error: 'Too many attempts. Please try again in 15 minutes.' };
       }
-    } catch {}
+    } catch { }
 
     let access: Access | null = null;
 
     if (data.mode === 'admin') {
-      const expected = process.env['ADMIN_PASSCODE'] || 'admin123';
+      const expected = getRequiredSecret('ADMIN_PASSCODE', 'admin123');
       let match = data.passcode.length === expected.length;
       let diff = 0;
       for (let i = 0; i < Math.max(data.passcode.length, expected.length); i++) {
@@ -96,7 +99,7 @@ export const signIn = createServerFn({ method: 'POST' })
         try {
           const store = await readServerStore();
           cust = store.customers.find(c => c.pin === data.passcode || c.pin_hash === hash);
-        } catch {}
+        } catch { }
       }
 
       if (cust) {
@@ -118,7 +121,7 @@ export const signIn = createServerFn({ method: 'POST' })
       try {
         const { supabaseAdmin: db } = await import('@/integrations/supabase/client.server');
         await db.rpc('feedback_record_failure', { attempt_keys: keys });
-      } catch {}
+      } catch { }
       return { ok: false, error: 'Access details are incorrect. Please try again.' };
     }
 
@@ -130,7 +133,7 @@ export const signOut = createServerFn({ method: 'POST' }).handler(async () => {
   try {
     const { session } = await import('./feedback-session.server');
     await (await session()).clear();
-  } catch {}
+  } catch { }
   return { ok: true };
 });
 
@@ -147,7 +150,7 @@ export const clearWorkspaceData = createServerFn({ method: 'POST' }).handler(asy
     await db.from('feedback_history').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await db.from('feedback_items').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await db.from('feedback_customers').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  } catch {}
+  } catch { }
 
   return { ok: true };
 });
@@ -167,22 +170,31 @@ export const getWorkspace = createServerFn({ method: 'GET' }).handler(
         const { supabaseAdmin: db, hasSupabaseAdmin } = await import('@/integrations/supabase/client.server');
         if (hasSupabaseAdmin()) {
           const [cq, iq, hq] = await Promise.all([
-            db.from('feedback_customers').select('*').order('name'),
             access.role === 'customer'
               ? db
-                  .from('feedback_items')
-                  .select('*')
-                  .eq('customer_id', access.customer_id!)
-                  .is('deleted_at', null)
-                  .order('number')
+                  .from('feedback_customers')
+                  .select('id, name, active, created_at')
+                  .eq('id', access.customer_id!)
+                  .order('name')
+              : db
+                  .from('feedback_customers')
+                  .select('id, name, active, created_at, pin_version')
+                  .order('name'),
+            access.role === 'customer'
+              ? db
+                .from('feedback_items')
+                .select('*')
+                .eq('customer_id', access.customer_id!)
+                .is('deleted_at', null)
+                .order('number')
               : db.from('feedback_items').select('*').order('number'),
             access.role === 'customer'
               ? db
-                  .from('feedback_history')
-                  .select('*')
-                  .eq('customer_id', access.customer_id!)
-                  .order('created_at', { ascending: false })
-                  .limit(50)
+                .from('feedback_history')
+                .select('*')
+                .eq('customer_id', access.customer_id!)
+                .order('created_at', { ascending: false })
+                .limit(50)
               : db.from('feedback_history').select('*').order('created_at', { ascending: false }).limit(100),
           ]);
 
@@ -194,7 +206,7 @@ export const getWorkspace = createServerFn({ method: 'GET' }).handler(
               const localStore = await readServerStore();
               localItemMap = new Map(localStore.items.map(i => [i.id, i]));
               localByKey = new Map(localStore.items.map(i => [`${i.customer_id}:${i.number}`, i]));
-            } catch {}
+            } catch { }
 
             const customerList = (cq.data ?? []) as any[];
             const customerMap = new Map<string, string>();
@@ -626,7 +638,7 @@ export const manageCustomer = createServerFn({ method: 'POST' })
       const localResult = await manageServerCustomer(data.action, data.name, data.id, access.actor);
       if (!pin) pin = localResult.pin ?? null;
       if (!customer && localResult.customer) customer = localResult.customer;
-    } catch {}
+    } catch { }
 
     return { pin, customer };
   });
@@ -768,7 +780,7 @@ export const importFeedback = createServerFn({ method: 'POST' })
         count = result.count;
         if (newPins.length === 0) newPins.push(...result.pins);
       }
-    } catch {}
+    } catch { }
 
     return { count, pins: newPins };
   });
@@ -784,6 +796,8 @@ export const syncClientWorkspace = createServerFn({ method: 'POST' })
       .parse(v),
   )
   .handler(async ({ data }) => {
+    const { requireAccess } = await import('./feedback-session.server');
+    await requireAccess(true);
     try {
       const synced = await syncClientDataToServer({
         items: data.items,
@@ -821,7 +835,7 @@ export const syncClientWorkspace = createServerFn({ method: 'POST' })
             );
           }
         }
-      } catch {}
+      } catch { }
 
       return { synced };
     } catch {

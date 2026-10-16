@@ -2,8 +2,19 @@ import { useSession, setResponseHeader, getRequestHeader, getCookie, setCookie }
 import { createHmac, randomInt, randomUUID } from 'node:crypto';
 import { SESSION_SECONDS, type Access } from './feedback-model';
 
+export function getRequiredSecret(name: string, devFallback: string): string {
+  const val = process.env[name];
+  if (!val) {
+    if (process.env['NODE_ENV'] === 'production') {
+      throw new Error(`CRITICAL SECURITY CONFIGURATION ERROR: Missing required environment variable: ${name}`);
+    }
+    return devFallback;
+  }
+  return val;
+}
+
 export async function session() {
-  const secret = process.env['SESSION_SECRET'] || 'feedback-default-dev-session-secret-key-at-least-32-bytes!';
+  const secret = getRequiredSecret('SESSION_SECRET', 'feedback-default-dev-session-secret-key-at-least-32-bytes!');
   setResponseHeader('Cache-Control', 'no-store');
   const isProd = process.env['NODE_ENV'] === 'production';
   return useSession<{ access?: Access }>({
@@ -20,7 +31,7 @@ export async function session() {
 }
 
 export function pinHash(pin: string) {
-  const secret = process.env['PIN_HASH_SECRET'] || 'feedback-default-dev-pin-hash-secret-at-least-32-bytes!';
+  const secret = getRequiredSecret('PIN_HASH_SECRET', 'feedback-default-dev-pin-hash-secret-at-least-32-bytes!');
   return createHmac('sha256', secret).update(pin).digest('hex');
 }
 
@@ -70,7 +81,7 @@ export async function requireAccess(admin = false) {
   return access;
 }
 
-export function attemptKeys() {
+export function attemptKeys(targetIdentifier?: string) {
   const isProd = process.env['NODE_ENV'] === 'production';
   let device = getCookie('feedback-device');
   if (!device) {
@@ -87,7 +98,15 @@ export function attemptKeys() {
     getRequestHeader('cf-connecting-ip') ??
     getRequestHeader('x-forwarded-for')?.split(',')[0]?.trim() ??
     'local';
-  return [pinHash(`device:${device}`), pinHash(`source:${source}`)];
+  const keys = [pinHash(`device:${device}`), pinHash(`source:${source}`)];
+  if (targetIdentifier) {
+    keys.push(pinHash(`target:${targetIdentifier.toLowerCase().trim()}`));
+  }
+  return keys;
+}
+
+export function attemptKeysWithTarget(targetIdentifier?: string) {
+  return attemptKeys(targetIdentifier);
 }
 
 export async function freshPin(): Promise<{ pin: string; hash: string }> {

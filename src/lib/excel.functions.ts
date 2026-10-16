@@ -191,6 +191,8 @@ export const exportFeedback = createServerFn({ method: 'POST' })
         .parse(v)
   )
   .handler(async ({ data }) => {
+    const { requireAccess } = await import('./feedback-session.server');
+    await requireAccess();
     const buffer = await generateFeedbackWorkbook(data.items, data.customers);
     return buffer.toString('base64');
   });
@@ -444,6 +446,8 @@ export async function parseExcelBuffer(
 export const previewImport = createServerFn({ method: 'POST' })
   .validator(v => fileSchema.parse(v))
   .handler(async ({ data }): Promise<ImportPreview> => {
+    const { requireAccess } = await import('./feedback-session.server');
+    await requireAccess(true);
     const buffer = Buffer.from(data.base64, 'base64');
     return parseExcelBuffer(buffer, data.name, data.customer_name);
   });

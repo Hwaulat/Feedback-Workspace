@@ -262,15 +262,8 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       if (res.error) {
         return { ok: false, error: res.error };
       }
-    } catch {}
-
-    if (passcode === 'admin123') {
-      const adminAccess: Access = { role: 'admin', actor: cleanActor, expires: Date.now() + 8 * 3600 * 1000, pic_name: cleanActor };
-      setClientAccess(adminAccess);
-      if (typeof window !== 'undefined') localStorage.setItem('loop_active_pic_name', cleanActor);
-      await refresh();
-      toast.success(`Welcome back, ${cleanActor}`);
-      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : 'Unable to sign in. Please try again.' };
     }
 
     return { ok: false, error: 'Incorrect internal team passcode. Please try again.' };

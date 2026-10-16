@@ -83,8 +83,7 @@ export function getSupabaseCredentials() {
   }
 
   const serviceKey =
-    getEnvVar('SUPABASE_SERVICE_ROLE_KEY') ||
-    getEnvVar('VITE_SUPABASE_SERVICE_ROLE_KEY');
+    getEnvVar('SUPABASE_SERVICE_ROLE_KEY');
   const anonKey =
     getEnvVar('SUPABASE_PUBLISHABLE_KEY') ||
     getEnvVar('VITE_SUPABASE_PUBLISHABLE_KEY');
@@ -110,7 +109,6 @@ function createSupabaseAdminClient() {
   console.log('[Supabase Admin Client Initialized]:', {
     url: SUPABASE_URL,
     hasKey: Boolean(SUPABASE_SERVICE_ROLE_KEY),
-    keyPrefix: SUPABASE_SERVICE_ROLE_KEY.slice(0, 10) + '...',
   });
 
   return createClient<Database>(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {

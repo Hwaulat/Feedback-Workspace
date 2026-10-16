@@ -76,12 +76,12 @@ export async function getServerWorkspace(access: Access | null): Promise<{
     const items = store.items.filter(i => i.customer_id === custId && !i.deleted_at);
     const customers = store.customers
       .filter(c => c.id === custId)
-      .map(({ pin_hash, ...rest }) => rest);
+      .map(({ pin_hash, pin, ...rest }) => rest);
     return { customers, items, history: [] };
   }
 
   // Admin access: return all items, customers, and history
-  const customers = store.customers.map(({ pin_hash, ...rest }) => rest);
+  const customers = store.customers.map(({ pin_hash, pin, ...rest }) => rest);
   return {
     customers,
     items: store.items,

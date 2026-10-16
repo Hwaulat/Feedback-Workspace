@@ -1006,38 +1006,42 @@ function Overview() {
                 )}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                <span
-                  className="badge done"
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    padding: '4px 9px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    borderRadius: 6,
-                  }}
-                  title="Total Done in this list"
-                >
-                  <CheckCircle2 size={13} style={{ flexShrink: 0 }} />
-                  Done: {modalDoneCount}
-                </span>
-                <span
-                  className="badge pending"
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 600,
-                    padding: '4px 9px',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    borderRadius: 6,
-                  }}
-                  title="Total Not Started in this list"
-                >
-                  <Hourglass size={13} style={{ flexShrink: 0 }} />
-                  Not Started: {modalNotStartedCount}
-                </span>
+                {popupCategory === 'changerequest' && (
+                  <>
+                    <span
+                      className="badge done"
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: '4px 9px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        borderRadius: 6,
+                      }}
+                      title="Total Done in this list"
+                    >
+                      <CheckCircle2 size={13} style={{ flexShrink: 0 }} />
+                      Done: {modalDoneCount}
+                    </span>
+                    <span
+                      className="badge pending"
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        padding: '4px 9px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        borderRadius: 6,
+                      }}
+                      title="Total Not Started in this list"
+                    >
+                      <Hourglass size={13} style={{ flexShrink: 0 }} />
+                      Not Started: {modalNotStartedCount}
+                    </span>
+                  </>
+                )}
                 <Button variant="ghost" size="icon" aria-label="Close" onClick={() => setPopupCategory(null)}>
                   <X size={16} />
                 </Button>

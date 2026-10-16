@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { Inbox, CheckCircle2, LoaderCircle, Hourglass, GitPullRequest, ArrowRight, Download, X, ClipboardCheck, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -93,6 +93,8 @@ function Overview() {
   const [recentTypeTab, setRecentTypeTab] = useState<'all' | 'Complaint' | 'Change Request' | 'Bug Report'>('all');
   const [recentCategory, setRecentCategory] = useState<string>('all');
   const [recentActivity, setRecentActivity] = useState<string>('all');
+  const [recentPage, setRecentPage] = useState(1);
+  const [recentPageSize, setRecentPageSize] = useState(10);
 
   const active = useMemo(() => items.filter(i => !i.deleted_at && (selectedCustomer === 'all' || i.customer_id === selectedCustomer)), [items, selectedCustomer]);
   const done = active.filter(i => i.activity === 'Done').length;
@@ -115,9 +117,18 @@ function Overview() {
         }
         return true;
       })
-      .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
-      .slice(0, 10);
+      .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
   }, [active, recentTypeTab, recentCategory, recentActivity]);
+
+  const recentTotalPages = Math.max(1, Math.ceil(filteredRecent.length / recentPageSize));
+  const recentPagedItems = useMemo(() => {
+    const start = (recentPage - 1) * recentPageSize;
+    return filteredRecent.slice(start, start + recentPageSize);
+  }, [filteredRecent, recentPage, recentPageSize]);
+
+  // Reset page when filters change
+  const recentFilterKey = `${recentTypeTab}-${recentCategory}-${recentActivity}`;
+  useEffect(() => { setRecentPage(1); }, [recentFilterKey, recentPageSize]);
 
   const typeCounts = (['Bug Report', 'Change Request', 'Complaint'] as const).map(t => ({
     label: t,
@@ -711,7 +722,7 @@ function Overview() {
                 </tr>
               </thead>
               <tbody>
-                {filteredRecent.map(item => (
+                {recentPagedItems.map(item => (
                   <tr key={item.id} onClick={() => setDetail(item)}>
                     <td>{item.number}</td>
                     <td>
@@ -774,6 +785,66 @@ function Overview() {
               </tbody>
             </table>
           </div>
+          {filteredRecent.length > recentPageSize && (
+            <div className="pagination-bar">
+              <div className="pagination-info">
+                Showing {(recentPage - 1) * recentPageSize + 1}–{Math.min(recentPage * recentPageSize, filteredRecent.length)} of {filteredRecent.length} items
+              </div>
+              <div className="pagination-controls">
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  disabled={recentPage <= 1}
+                  onClick={() => setRecentPage(p => Math.max(1, p - 1))}
+                  aria-label="Previous page"
+                >
+                  ‹ Prev
+                </button>
+                {Array.from({ length: recentTotalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === recentTotalPages || Math.abs(p - recentPage) <= 1)
+                  .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] ?? 0) > 1) acc.push('ellipsis');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, idx) =>
+                    p === 'ellipsis' ? (
+                      <span key={`e${idx}`} className="pagination-ellipsis">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`pagination-btn ${p === recentPage ? 'active' : ''}`}
+                        onClick={() => setRecentPage(p)}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  disabled={recentPage >= recentTotalPages}
+                  onClick={() => setRecentPage(p => Math.min(recentTotalPages, p + 1))}
+                  aria-label="Next page"
+                >
+                  Next ›
+                </button>
+              </div>
+              <div className="pagination-size">
+                <label htmlFor="recent-page-size">Rows:</label>
+                <select
+                  id="recent-page-size"
+                  value={recentPageSize}
+                  onChange={e => { setRecentPageSize(Number(e.target.value)); setRecentPage(1); }}
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

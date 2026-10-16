@@ -1,6 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { Plus, Search, Download, Trash2, RotateCcw } from 'lucide-react';
+import { Plus, Search, Download, Trash2, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
 import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, typeBadge, fmtDate, fmtDateTime, fmtReportDate } from '@/components/feedback-views';
@@ -17,6 +17,8 @@ function FeedbackPage() {
   const [reviewFilter, setReviewFilter] = useState('all');
   const [viewTrash, setViewTrash] = useState(false);
   const [detail, setDetail] = useState<FeedbackItem | null>(null); const [editing, setEditing] = useState<FeedbackItem | null>(null); const [creating, setCreating] = useState(false);
+  const [fbPage, setFbPage] = useState(1);
+  const [fbPageSize, setFbPageSize] = useState(10);
   const canManage = access?.role === 'admin';
   const isCustomer = access?.role === 'customer';
 
@@ -34,6 +36,16 @@ function FeedbackPage() {
       && (reviewFilter === 'all' || (reviewFilter === 'needs_update' ? Boolean(i.needs_review) : !i.needs_review))
       && (search === '' || `${i.feature} ${i.feedback} ${i.notes} ${i.detail}`.toLowerCase().includes(search.toLowerCase())))
     .sort((a, b) => b.number - a.number), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search]);
+
+  const fbTotalPages = Math.max(1, Math.ceil(rows.length / fbPageSize));
+  const paginatedRows = useMemo(() => {
+    const start = (fbPage - 1) * fbPageSize;
+    return rows.slice(start, start + fbPageSize);
+  }, [rows, fbPage, fbPageSize]);
+
+  // Reset page when filters change
+  const fbFilterKey = `${viewTrash}-${selectedCustomer}-${type}-${status}-${activity}-${reviewFilter}-${search}`;
+  useEffect(() => { setFbPage(1); }, [fbFilterKey, fbPageSize]);
 
   const open = (item: FeedbackItem) => (canManage ? setEditing(item) : setDetail(item));
   const needsUpdateCount = items.filter(i => !i.deleted_at && i.needs_review).length;
@@ -155,7 +167,7 @@ function FeedbackPage() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map(item => (
+                {paginatedRows.map(item => (
                   <tr key={item.id} onClick={() => open(item)}>
                     <td style={{ textAlign: 'center', padding: '10px 8px', width: item.deleted_at ? 95 : 60 }} onClick={e => e.stopPropagation()}>
                       {item.deleted_at ? (
@@ -281,8 +293,73 @@ function FeedbackPage() {
                 ))}
               </tbody>
             </table>
-          </div><div className="table-footer"><span>Click a row to {canManage ? 'edit' : 'view or edit'} the full details.</span><span>Last updated times shown in Jakarta time (WIB).</span></div></div>
-          <div className="mobile-feedback-list">{rows.map(item => (
+          </div>
+            <div className="table-footer">
+              <span>Click a row to {canManage ? 'edit' : 'view or edit'} the full details.</span>
+              <span>Showing {rows.length > 0 ? (fbPage - 1) * fbPageSize + 1 : 0}–{Math.min(fbPage * fbPageSize, rows.length)} of {rows.length} items</span>
+            </div>
+            {rows.length > fbPageSize && (
+              <div className="pagination-bar">
+                <div className="pagination-info">
+                  Page {fbPage} of {fbTotalPages}
+                </div>
+                <div className="pagination-controls">
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    disabled={fbPage <= 1}
+                    onClick={() => setFbPage(p => Math.max(1, p - 1))}
+                    aria-label="Previous page"
+                  >
+                    ‹ Prev
+                  </button>
+                  {Array.from({ length: fbTotalPages }, (_, i) => i + 1)
+                    .filter(p => p === 1 || p === fbTotalPages || Math.abs(p - fbPage) <= 1)
+                    .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                      if (idx > 0 && p - (arr[idx - 1] ?? 0) > 1) acc.push('ellipsis');
+                      acc.push(p);
+                      return acc;
+                    }, [])
+                    .map((p, idx) =>
+                      p === 'ellipsis' ? (
+                        <span key={`e${idx}`} className="pagination-ellipsis">…</span>
+                      ) : (
+                        <button
+                          key={p}
+                          type="button"
+                          className={`pagination-btn ${p === fbPage ? 'active' : ''}`}
+                          onClick={() => setFbPage(p)}
+                        >
+                          {p}
+                        </button>
+                      )
+                    )}
+                  <button
+                    type="button"
+                    className="pagination-btn"
+                    disabled={fbPage >= fbTotalPages}
+                    onClick={() => setFbPage(p => Math.min(fbTotalPages, p + 1))}
+                    aria-label="Next page"
+                  >
+                    Next ›
+                  </button>
+                </div>
+                <div className="pagination-size">
+                  <label htmlFor="fb-page-size">Rows per page:</label>
+                  <select
+                    id="fb-page-size"
+                    value={fbPageSize}
+                    onChange={e => { setFbPageSize(Number(e.target.value)); setFbPage(1); }}
+                  >
+                    <option value={10}>10</option>
+                    <option value={20}>20</option>
+                    <option value={50}>50</option>
+                  </select>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="mobile-feedback-list">{paginatedRows.map(item => (
             <div className="feedback-mobile-item" key={item.id} onClick={() => open(item)}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -368,7 +445,68 @@ function FeedbackPage() {
                 <time>{fmtDate(item.updated_at)}</time>
               </div>
             </div>
-          ))}</div>
+          ))}
+          {rows.length > fbPageSize && (
+            <div className="pagination-bar" style={{ padding: '14px 16px' }}>
+              <div className="pagination-info">
+                {(fbPage - 1) * fbPageSize + 1}–{Math.min(fbPage * fbPageSize, rows.length)} of {rows.length}
+              </div>
+              <div className="pagination-controls">
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  disabled={fbPage <= 1}
+                  onClick={() => setFbPage(p => Math.max(1, p - 1))}
+                  aria-label="Previous page"
+                >
+                  ‹ Prev
+                </button>
+                {Array.from({ length: fbTotalPages }, (_, i) => i + 1)
+                  .filter(p => p === 1 || p === fbTotalPages || Math.abs(p - fbPage) <= 1)
+                  .reduce<(number | 'ellipsis')[]>((acc, p, idx, arr) => {
+                    if (idx > 0 && p - (arr[idx - 1] ?? 0) > 1) acc.push('ellipsis');
+                    acc.push(p);
+                    return acc;
+                  }, [])
+                  .map((p, idx) =>
+                    p === 'ellipsis' ? (
+                      <span key={`e${idx}`} className="pagination-ellipsis">…</span>
+                    ) : (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`pagination-btn ${p === fbPage ? 'active' : ''}`}
+                        onClick={() => setFbPage(p)}
+                      >
+                        {p}
+                      </button>
+                    )
+                  )}
+                <button
+                  type="button"
+                  className="pagination-btn"
+                  disabled={fbPage >= fbTotalPages}
+                  onClick={() => setFbPage(p => Math.min(fbTotalPages, p + 1))}
+                  aria-label="Next page"
+                >
+                  Next ›
+                </button>
+              </div>
+              <div className="pagination-size">
+                <label htmlFor="fb-page-size-mobile">Rows:</label>
+                <select
+                  id="fb-page-size-mobile"
+                  value={fbPageSize}
+                  onChange={e => { setFbPageSize(Number(e.target.value)); setFbPage(1); }}
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+          )}
+          </div>
         </>
       )}
       {detail && (

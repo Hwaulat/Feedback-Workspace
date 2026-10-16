@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { Inbox, CheckCircle2, LoaderCircle, Hourglass, GitPullRequest, ArrowRight, Download, X, ClipboardCheck, RotateCcw } from 'lucide-react';
+import { Search, Inbox, CheckCircle2, LoaderCircle, Hourglass, GitPullRequest, ArrowRight, Download, X, ClipboardCheck, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
 import { DetailModal, activityBadge, categoryBadge, statusBadge, typeBadge, fmtDate, fmtReportDate } from '@/components/feedback-views';
@@ -1002,8 +1002,24 @@ function Overview() {
               {popupData.subtitle}
             </p>
 
-            {/* Filter bar: Review Status, Type, Category, Status, Activity & Search */}
+            {/* Filter bar: Search, Review Status, Type, Category, Status, Activity */}
             <div className="modal-filter-bar">
+              <div className="modal-filter-group" style={{ minWidth: 200, maxWidth: 300, flex: 1 }}>
+                <label htmlFor="modal-search" className="modal-filter-label">Search</label>
+                <div style={{ position: 'relative', width: '100%' }}>
+                  <Search size={13} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted-foreground)', pointerEvents: 'none' }} />
+                  <input
+                    id="modal-search"
+                    type="search"
+                    className="modal-filter-search"
+                    style={{ paddingLeft: 28 }}
+                    placeholder="Search feedback, feature, PIC..."
+                    value={modalSearch}
+                    onChange={e => setModalSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div className="modal-filter-group">
                 <label htmlFor="modal-review-filter" className="modal-filter-label">Review Status</label>
                 <select
@@ -1078,18 +1094,6 @@ function Overview() {
                     <option key={a} value={a}>{a}</option>
                   ))}
                 </select>
-              </div>
-
-              <div className="modal-filter-group" style={{ flex: 1, minWidth: 150 }}>
-                <label htmlFor="modal-search" className="modal-filter-label">Search</label>
-                <input
-                  id="modal-search"
-                  type="search"
-                  className="modal-filter-search"
-                  placeholder="Filter feedback, feature, PIC..."
-                  value={modalSearch}
-                  onChange={e => setModalSearch(e.target.value)}
-                />
               </div>
 
               {hasActiveModalFilters && (

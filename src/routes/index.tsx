@@ -66,7 +66,7 @@ function Overview() {
 
   const hasActiveModalFilters =
     modalReviewFilter !== defaultReviewFilter ||
-    modalTypeFilter !== defaultTypeFilter ||
+    (popupCategory !== 'changerequest' && modalTypeFilter !== defaultTypeFilter) ||
     modalCategoryFilter !== 'all' ||
     modalStatusFilter !== 'all' ||
     modalActivityFilter !== defaultActivityFilter ||
@@ -240,7 +240,9 @@ function Overview() {
           if (isNeedsUpdate(item, customers)) return false;
         }
 
-        if (modalTypeFilter !== 'all' && item.type !== modalTypeFilter) {
+        if (popupCategory === 'changerequest') {
+          if (item.type !== 'Change Request') return false;
+        } else if (modalTypeFilter !== 'all' && item.type !== modalTypeFilter) {
           return false;
         }
 
@@ -888,20 +890,22 @@ function Overview() {
                 </select>
               </div>
 
-              <div className="modal-filter-group">
-                <label htmlFor="modal-type-filter" className="modal-filter-label">Type</label>
-                <select
-                  id="modal-type-filter"
-                  className="modal-filter-select"
-                  value={modalTypeFilter}
-                  onChange={e => setModalTypeFilter(e.target.value)}
-                >
-                  <option value="all">All Types</option>
-                  {types.map(t => (
-                    <option key={t} value={t}>{t}</option>
-                  ))}
-                </select>
-              </div>
+              {popupCategory !== 'changerequest' && (
+                <div className="modal-filter-group">
+                  <label htmlFor="modal-type-filter" className="modal-filter-label">Type</label>
+                  <select
+                    id="modal-type-filter"
+                    className="modal-filter-select"
+                    value={modalTypeFilter}
+                    onChange={e => setModalTypeFilter(e.target.value)}
+                  >
+                    <option value="all">All Types</option>
+                    {types.map(t => (
+                      <option key={t} value={t}>{t}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="modal-filter-group">
                 <label htmlFor="modal-category-filter" className="modal-filter-label">Category</label>

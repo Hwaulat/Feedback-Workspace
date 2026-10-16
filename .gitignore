@@ -7,6 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies and Build Output
 node_modules
 dist
 dist-ssr
@@ -15,6 +16,14 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+
+# Environment variables (abaikan .env tapi izinkan .env.example)
+.env
+.env.*
+!.env.example
+
+# Sensitive Data / Storage
+data/
 
 # Wrangler / Cloudflare
 .wrangler/

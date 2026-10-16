@@ -72,11 +72,12 @@ export type WorkspaceContext = {
   loginCustomer: (pin: string, picName?: string) => Promise<{ ok: boolean; error?: string }>;
   logout: () => Promise<void>;
   clearAllData: () => Promise<void>;
-  save: (item: ItemInput, existing?: FeedbackItem) => Promise<void>;
+  save: (item: ItemInput, existing?: FeedbackItem) => Promise<FeedbackItem | undefined | void>;
   remove: (item: FeedbackItem, restore?: boolean) => Promise<void>;
   customerAction: (action: 'create' | 'regenerate' | 'toggle' | 'delete', name: string, id?: string) => Promise<string | null>;
   importRows: (rows: Array<ItemInput & { customer_name: string; is_update?: boolean }>) => Promise<{ count: number; pins: { name: string; pin: string }[] }>;
   exportToExcel: (subset?: FeedbackItem[], customFileName?: string) => Promise<void>;
+  exportChangeRequests: (subset?: FeedbackItem[], customFileName?: string) => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -748,6 +749,71 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     }
   }
 
+  // Feature: Dedicated Change Request (CR) Excel Export Handler
+  async function exportChangeRequests(subset?: FeedbackItem[], customFileName?: string) {
+    const rawTarget = subset || items.filter(i => !i.deleted_at);
+    const crItems = rawTarget.filter(i => {
+      const t = (i.type || '').toLowerCase();
+      return t.includes('change') || t.includes('request') || t.includes('cr');
+    });
+
+    if (crItems.length === 0) {
+      toast.error('Tidak ada tiket bertipe Change Request (CR) untuk di-download.');
+      return;
+    }
+
+    const toastId = toast.loading(`Menyiapkan ${crItems.length} dokumen Change Request (CR)…`);
+    try {
+      let targetCustomerName = '';
+      if (selectedCustomer && selectedCustomer !== 'all') {
+        const found = customers.find(c => c.id === selectedCustomer);
+        if (found) targetCustomerName = found.name;
+      } else if (access?.role === 'customer' && access.customer_id) {
+        const found = customers.find(c => c.id === access.customer_id);
+        if (found) targetCustomerName = found.name;
+      }
+
+      const payload = {
+        items: crItems.map(i => ({
+          customer_id: i.customer_id,
+          number: i.number,
+          feature: i.feature,
+          feedback: i.feedback,
+          detail: i.detail,
+          type: i.type,
+          category: i.category,
+          status: i.status,
+          activity: i.activity,
+          notes: i.notes,
+          report_date: i.report_date ?? i.updated_at.slice(0, 10),
+          estimated_date: i.estimated_date,
+          pic_name: (i as any).pic_name ?? (i as any).actor ?? '',
+        })),
+        customers: customers.map(c => ({
+          id: c.id,
+          name: c.name,
+        })),
+        mode: 'cr' as const,
+        customer_name: targetCustomerName || undefined,
+      };
+
+      const b64 = await exportFn({ data: payload });
+      const blob = await (
+        await fetch(`data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${b64}`)
+      ).blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const cleanCust = targetCustomerName ? `-${targetCustomerName.replace(/[^a-zA-Z0-9_-]/g, '_')}` : '';
+      a.download = customFileName || `CR-Report${cleanCust}-${todayWIB()}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${crItems.length} tiket Change Request berhasil di-download!`, { id: toastId });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Gagal men-download dokumen Change Request.', { id: toastId });
+    }
+  }
+
   return (
     <Context.Provider
       value={{
@@ -771,6 +837,7 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
         customerAction,
         importRows,
         exportToExcel,
+        exportChangeRequests,
         refresh,
       }}
     >

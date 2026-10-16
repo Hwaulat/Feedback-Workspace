@@ -711,14 +711,14 @@ describe('Feature 14: PIC Name in Customer Login & Feedback List Column', () => 
     };
 
     // The subtext / badge replaces 'Customer portal' with pic_name
-    const badgeText = customerAccess.role === 'admin'
+    const badgeText = (customerAccess.role as string) === 'admin'
       ? 'Team access'
       : (customerAccess.pic_name || 'Customer portal');
     expect(badgeText).toBe('Siti Rahma');
 
     // Without pic_name, fallbacks to 'Customer portal'
     const fallbackAccess = { ...customerAccess, pic_name: null };
-    const fallbackBadge = fallbackAccess.role === 'admin'
+    const fallbackBadge = (fallbackAccess.role as string) === 'admin'
       ? 'Team access'
       : (fallbackAccess.pic_name || 'Customer portal');
     expect(fallbackBadge).toBe('Customer portal');
@@ -727,7 +727,7 @@ describe('Feature 14: PIC Name in Customer Login & Feedback List Column', () => 
 
 describe('Feature 15: Review Status Metric Card on Overview Page', () => {
   it('correctly calculates total updated and needs update counts across items', () => {
-    const items: FeedbackItem[] = [
+    const items = [
       {
         id: 'item-1',
         customer_id: '00000000-0000-4000-8000-000000000001',
@@ -741,7 +741,7 @@ describe('Feature 15: Review Status Metric Card on Overview Page', () => {
         activity: 'In progress',
         notes: '',
         needs_review: false,
-        created_at: '2026-10-15T00:00:00Z',
+        estimated_date: null,
         updated_at: '2026-10-15T00:00:00Z',
       },
       {
@@ -757,7 +757,7 @@ describe('Feature 15: Review Status Metric Card on Overview Page', () => {
         activity: 'Not started',
         notes: '',
         needs_review: true,
-        created_at: '2026-10-15T00:00:00Z',
+        estimated_date: null,
         updated_at: '2026-10-15T00:00:00Z',
       },
       {
@@ -769,14 +769,14 @@ describe('Feature 15: Review Status Metric Card on Overview Page', () => {
         detail: '',
         type: 'Change Request',
         category: 'Minor',
-        status: 'Done',
+        status: 'Execution',
         activity: 'Done',
         notes: '',
         needs_review: false,
-        created_at: '2026-10-15T00:00:00Z',
+        estimated_date: null,
         updated_at: '2026-10-15T00:00:00Z',
       },
-    ];
+    ] as unknown as FeedbackItem[];
 
     const needsUpdateCount = items.filter(i => isNeedsUpdate(i)).length;
     const updatedCount = items.length - needsUpdateCount;
@@ -789,7 +789,7 @@ describe('Feature 15: Review Status Metric Card on Overview Page', () => {
 });
 
 describe('Feature 16: Overview Detail Modal Multi-Filter (Review Status, Type, Category, Status, Activity)', () => {
-  const sampleItems: FeedbackItem[] = [
+  const sampleItems = [
     {
       id: 'item-1',
       customer_id: '00000000-0000-4000-8000-000000000001',
@@ -803,7 +803,7 @@ describe('Feature 16: Overview Detail Modal Multi-Filter (Review Status, Type, C
       activity: 'In progress',
       notes: '',
       needs_review: false,
-      created_at: '2026-10-15T00:00:00Z',
+      estimated_date: null,
       updated_at: '2026-10-15T00:00:00Z',
     },
     {
@@ -819,7 +819,7 @@ describe('Feature 16: Overview Detail Modal Multi-Filter (Review Status, Type, C
       activity: 'Not started',
       notes: '',
       needs_review: true,
-      created_at: '2026-10-15T00:00:00Z',
+      estimated_date: null,
       updated_at: '2026-10-15T00:00:00Z',
     },
     {
@@ -831,11 +831,11 @@ describe('Feature 16: Overview Detail Modal Multi-Filter (Review Status, Type, C
       detail: '',
       type: 'Change Request',
       category: 'Minor',
-      status: 'Done',
+      status: 'Done' as any,
       activity: 'Done',
       notes: '',
       needs_review: false,
-      created_at: '2026-10-15T00:00:00Z',
+      estimated_date: null,
       updated_at: '2026-10-15T00:00:00Z',
     },
     {
@@ -851,10 +851,10 @@ describe('Feature 16: Overview Detail Modal Multi-Filter (Review Status, Type, C
       activity: 'In progress',
       notes: '',
       needs_review: false,
-      created_at: '2026-10-15T00:00:00Z',
+      estimated_date: null,
       updated_at: '2026-10-15T00:00:00Z',
     },
-  ];
+  ] as unknown as FeedbackItem[];
 
   it('filters modal items correctly by review status (needs_update and updated)', () => {
     const needsUpdateOnly = sampleItems.filter(i => isNeedsUpdate(i));

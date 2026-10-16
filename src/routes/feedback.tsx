@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { Plus, Search, Download, Trash2, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Download, Trash2, RotateCcw, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useWorkspace } from '@/components/feedback-provider';
 import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, typeBadge, fmtDate, fmtDateTime, fmtReportDate } from '@/components/feedback-views';
@@ -12,7 +12,7 @@ export const Route = createFileRoute('/feedback')({
 });
 
 function FeedbackPage() {
-  const { access, demo, customers, items, selectedCustomer, setSelectedCustomer, exportToExcel, remove, openLogin } = useWorkspace();
+  const { access, demo, customers, items, selectedCustomer, setSelectedCustomer, exportToExcel, exportChangeRequests, remove, openLogin } = useWorkspace();
   const [search, setSearch] = useState(''); const [type, setType] = useState('all'); const [status, setStatus] = useState('all'); const [activity, setActivity] = useState('all');
   const [reviewFilter, setReviewFilter] = useState('all');
   const [viewTrash, setViewTrash] = useState(false);
@@ -36,6 +36,11 @@ function FeedbackPage() {
       && (reviewFilter === 'all' || (reviewFilter === 'needs_update' ? Boolean(i.needs_review) : !i.needs_review))
       && (search === '' || `${i.feature} ${i.feedback} ${i.notes} ${i.detail}`.toLowerCase().includes(search.toLowerCase())))
     .sort((a, b) => b.number - a.number), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search]);
+
+  const crRows = useMemo(() => rows.filter(i => {
+    const t = (i.type || '').toLowerCase();
+    return t.includes('change') || t.includes('request') || t.includes('cr');
+  }), [rows]);
 
   const fbTotalPages = Math.max(1, Math.ceil(rows.length / fbPageSize));
   const paginatedRows = useMemo(() => {
@@ -77,6 +82,18 @@ function FeedbackPage() {
             >
               <Trash2 className="w-4 h-4 mr-1.5" />
               <span>{viewTrash ? 'Active list' : `Trash (${trashCount})`}</span>
+            </Button>
+          )}
+          {!viewTrash && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportChangeRequests(crRows)}
+              disabled={crRows.length === 0}
+              title="Download Change Request (CR) report to formatted Excel file (.xlsx)"
+              className="border-sky-500/30 text-sky-600 hover:bg-sky-500/10 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 font-medium"
+            >
+              <FileSpreadsheet />Download CR ({crRows.length})
             </Button>
           )}
           {!viewTrash && (

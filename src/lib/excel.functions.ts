@@ -99,7 +99,261 @@ export type ExportFeedbackItem = {
   activity: string;
   notes?: string | null | undefined;
   estimated_date?: string | null | undefined;
+  report_date?: string | null | undefined;
+  pic_name?: string | null | undefined;
 };
+
+export async function generateChangeRequestWorkbook(
+  items: ExportFeedbackItem[],
+  customers: Array<{ id: string; name: string }>,
+  targetCustomerName?: string
+): Promise<Buffer> {
+  const { default: ExcelJS } = await import('exceljs');
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Loop Ticketing Workspace';
+  wb.lastModifiedBy = 'Loop System';
+  wb.created = new Date();
+  wb.modified = new Date();
+
+  const ws = wb.addWorksheet('Change Requests', {
+    views: [{ state: 'frozen', ySplit: 8, showGridLines: true }],
+    properties: { defaultRowHeight: 22 },
+  });
+
+  const custMap = new Map<string, string>();
+  customers.forEach(c => custMap.set(c.id, c.name));
+
+  // Filter only Change Request items
+  const crItems = items.filter(i => {
+    const t = (i.type || '').toLowerCase();
+    return t.includes('change') || t.includes('request') || t.includes('cr');
+  });
+
+  const sorted = [...crItems].sort((a, b) => {
+    const cA = custMap.get(a.customer_id) ?? '';
+    const cB = custMap.get(b.customer_id) ?? '';
+    if (cA !== cB) return cA.localeCompare(cB);
+    return a.number - b.number;
+  });
+
+  // Calculate KPIs
+  const totalCR = sorted.length;
+  const doneCount = sorted.filter(i => i.activity === 'Done').length;
+  const inProgressCount = sorted.filter(i => i.activity === 'In progress').length;
+  const waitingCount = sorted.filter(i => i.activity === 'Not started' || i.activity === 'Pending' || i.status === 'Waiting').length;
+
+  const customerLabel = targetCustomerName || (custMap.size === 1 ? Array.from(custMap.values())[0] : 'All Registered Clients');
+  const dateFormatted = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jakarta',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date());
+
+  // Define Column Widths
+  ws.columns = [
+    { key: 'no', width: 7 },              // A: No
+    { key: 'customer', width: 28 },        // B: Customer
+    { key: 'feature', width: 24 },         // C: Feature / Module
+    { key: 'title', width: 36 },           // D: Change Request Title
+    { key: 'detail', width: 44 },          // E: Detail / Scope
+    { key: 'category', width: 15 },        // F: Priority
+    { key: 'status', width: 20 },          // G: Status
+    { key: 'activity', width: 18 },        // H: Progress
+    { key: 'pic', width: 20 },             // I: PIC / Reporter
+    { key: 'report_date', width: 16 },     // J: Report Date
+    { key: 'estimated_date', width: 22 },  // K: Target Completion
+    { key: 'notes', width: 36 },           // L: Notes
+  ];
+
+  const thinBorder = {
+    top: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+    left: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+    bottom: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+    right: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+  };
+
+  // Row 1: Blank Spacer
+  ws.addRow([]);
+  ws.getRow(1).height = 10;
+
+  // Row 2: Header Title Banner
+  ws.mergeCells('A2:L2');
+  const titleCell = ws.getCell('A2');
+  titleCell.value = '   DOKUMEN CHANGE REQUEST (CR) REPORT';
+  titleCell.font = { name: 'Segoe UI', size: 15, bold: true, color: { argb: 'FFFFFFFF' } };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+  titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+  ws.getRow(2).height = 36;
+
+  // Row 3: Subtitle Metadata
+  ws.mergeCells('A3:L3');
+  const subCell = ws.getCell('A3');
+  subCell.value = `   Workspace: ${customerLabel}   •   Exported: ${dateFormatted} WIB   •   Total CR: ${totalCR} Item(s)`;
+  subCell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF94A3B8' }, italic: true };
+  subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+  subCell.alignment = { vertical: 'middle', horizontal: 'left' };
+  ws.getRow(3).height = 22;
+
+  // Row 4: Spacer
+  ws.addRow([]);
+  ws.getRow(4).height = 10;
+
+  // Row 5 & 6: Executive KPI Summary Cards
+  const setKpiCard = (startCol: string, endCol: string, label: string, value: number, bgHex: string, borderHex: string, textHex: string) => {
+    ws.mergeCells(`${startCol}5:${endCol}5`);
+    ws.mergeCells(`${startCol}6:${endCol}6`);
+    const lblCell = ws.getCell(`${startCol}5`);
+    lblCell.value = label;
+    lblCell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: textHex } };
+    lblCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    lblCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgHex } };
+
+    const valCell = ws.getCell(`${startCol}6`);
+    valCell.value = value;
+    valCell.font = { name: 'Segoe UI', size: 16, bold: true, color: { argb: textHex } };
+    valCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgHex } };
+
+    const cols = [startCol, endCol];
+    const rows = [5, 6];
+    rows.forEach(r => {
+      cols.forEach(c => {
+        ws.getCell(`${c}${r}`).border = {
+          top: { style: 'thin', color: { argb: borderHex } },
+          left: { style: 'thin', color: { argb: borderHex } },
+          bottom: { style: 'thin', color: { argb: borderHex } },
+          right: { style: 'thin', color: { argb: borderHex } },
+        };
+      });
+    });
+  };
+
+  setKpiCard('B', 'C', 'TOTAL CHANGE REQUESTS', totalCR, 'FFF0F9FF', 'FFBAE6FD', 'FF0369A1');
+  setKpiCard('E', 'F', 'COMPLETED (DONE)', doneCount, 'FFECFDF5', 'FFA7F3D0', 'FF047857');
+  setKpiCard('H', 'I', 'IN PROGRESS', inProgressCount, 'FFEFF6FF', 'FFBFDBFE', 'FF1D4ED8');
+  setKpiCard('K', 'L', 'WAITING / NOT STARTED', waitingCount, 'FFFFFBEB', 'FFFDE68A', 'FFB45309');
+
+  ws.getRow(5).height = 18;
+  ws.getRow(6).height = 28;
+
+  // Row 7: Spacer
+  ws.addRow([]);
+  ws.getRow(7).height = 12;
+
+  // Row 8: Table Header
+  const crHeaders = [
+    'No.',
+    'Customer',
+    'Feature / Module',
+    'Change Request (CR)',
+    'Detail Information',
+    'Priority',
+    'Status Workflow',
+    'Progress Activity',
+    'PIC / Reporter',
+    'Report Date',
+    'Target Completion',
+    'Notes from Team',
+  ];
+
+  const headerRow = ws.addRow(crHeaders);
+  headerRow.height = 30;
+  headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+    cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal: colNumber === 1 || colNumber === 6 || colNumber === 7 || colNumber === 8 || colNumber === 10 || colNumber === 11 ? 'center' : 'left',
+    };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF0369A1' } },
+      bottom: { style: 'medium', color: { argb: 'FF0369A1' } },
+      left: { style: 'thin', color: { argb: 'FF38BDF8' } },
+      right: { style: 'thin', color: { argb: 'FF38BDF8' } },
+    };
+  });
+
+  // Data Rows (Row 9 onwards)
+  let rowIndex = 9;
+  for (const [idx, item] of sorted.entries()) {
+    const customerName = custMap.get(item.customer_id) || 'General';
+    const isEven = idx % 2 === 0;
+    const bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+
+    const row = ws.addRow([
+      idx + 1,
+      safeCell(customerName),
+      safeCell(item.feature || '—'),
+      safeCell(item.feedback),
+      safeCell(item.detail || '—'),
+      item.category || '—',
+      item.status || '—',
+      item.activity || '—',
+      safeCell(item.pic_name || '—'),
+      item.report_date ? item.report_date.slice(0, 10) : '—',
+      item.estimated_date || '—',
+      safeCell(item.notes || '—'),
+    ]);
+
+    row.height = 24;
+
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF1E293B' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+      cell.border = thinBorder;
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal: colNumber === 1 || colNumber === 6 || colNumber === 7 || colNumber === 8 || colNumber === 10 || colNumber === 11 ? 'center' : 'left',
+        wrapText: colNumber === 4 || colNumber === 5 || colNumber === 12,
+      };
+
+      // Priority Pill highlight
+      if (colNumber === 6) {
+        const cat = String(cell.value);
+        if (cat === 'Major') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFDC2626' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF2F2' } };
+        } else if (cat === 'Medium') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFD97706' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
+        } else if (cat === 'Minor') {
+          cell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF2563EB' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+        }
+      }
+
+      // Activity Pill highlight
+      if (colNumber === 8) {
+        const act = String(cell.value);
+        if (act === 'Done') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF059669' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFDF5' } };
+        } else if (act === 'In progress') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF2563EB' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+        } else if (act === 'Not started' || act === 'Pending') {
+          cell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF64748B' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        }
+      }
+    });
+
+    rowIndex++;
+  }
+
+  // Set AutoFilter on header row
+  const lastRow = Math.max(rowIndex - 1, 8);
+  ws.autoFilter = {
+    from: { row: 8, column: 1 },
+    to: { row: lastRow, column: 12 },
+  };
+
+  const buffer = await wb.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
 
 export async function generateFeedbackWorkbook(
   items: ExportFeedbackItem[],
@@ -179,6 +433,8 @@ export const exportFeedback = createServerFn({ method: 'POST' })
               activity: z.string(),
               notes: z.string().optional().nullable().default(''),
               estimated_date: z.string().nullable().optional(),
+              report_date: z.string().nullable().optional(),
+              pic_name: z.string().nullable().optional(),
             })
           ),
           customers: z.array(
@@ -187,13 +443,17 @@ export const exportFeedback = createServerFn({ method: 'POST' })
               name: z.string(),
             })
           ),
+          mode: z.enum(['all', 'cr']).optional().default('all'),
+          customer_name: z.string().optional(),
         })
         .parse(v)
   )
   .handler(async ({ data }) => {
     const { requireAccess } = await import('./feedback-session.server');
     await requireAccess();
-    const buffer = await generateFeedbackWorkbook(data.items, data.customers);
+    const buffer = data.mode === 'cr'
+      ? await generateChangeRequestWorkbook(data.items, data.customers, data.customer_name)
+      : await generateFeedbackWorkbook(data.items, data.customers);
     return buffer.toString('base64');
   });
 

@@ -64,7 +64,7 @@ function CustomersInner() {
                 <div className="customer-stats">
                   <div><strong>{count}</strong><span>Feedback items</span></div>
                   <div><strong>v{c.pin_version}</strong><span>PIN version</span></div>
-                  {c.pin && <div><strong>{c.pin}</strong><span>Active PIN</span></div>}
+                  <div><strong className="font-mono tracking-wider">{c.pin || '—'}</strong><span>Active PIN</span></div>
                 </div>
                 <div className="form-actions" style={{ marginTop: 18 }}>
                   <Button variant="outline" size="sm" disabled={busy} onClick={() => regenerate(c.id, c.name)}>Regenerate PIN</Button>

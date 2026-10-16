@@ -178,7 +178,7 @@ export const getWorkspace = createServerFn({ method: 'GET' }).handler(
                   .order('name')
               : db
                   .from('feedback_customers')
-                  .select('id, name, active, created_at, pin_version')
+                  .select('id, name, active, created_at, pin_version, pin')
                   .order('name'),
             access.role === 'customer'
               ? db

@@ -81,7 +81,7 @@ export async function getServerWorkspace(access: Access | null): Promise<{
   }
 
   // Admin access: return all items, customers, and history
-  const customers = store.customers.map(({ pin_hash, pin, ...rest }) => rest);
+  const customers = store.customers.map(({ pin_hash, ...rest }) => rest);
   return {
     customers,
     items: store.items,

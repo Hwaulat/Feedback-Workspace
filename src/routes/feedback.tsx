@@ -88,23 +88,22 @@ function FeedbackPage() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => exportChangeRequests(crRows)}
-              disabled={crRows.length === 0}
-              title="Download Change Request (CR) report to formatted Excel file (.xlsx)"
-              className="border-sky-500/30 text-sky-600 hover:bg-sky-500/10 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 font-medium"
-            >
-              <FileSpreadsheet />Download CR ({crRows.length})
-            </Button>
-          )}
-          {!viewTrash && (
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => exportToExcel(rows)}
               disabled={rows.length === 0}
               title="Export feedback to Excel file (.xlsx)"
             >
               <Download />Export by Excel ({rows.length})
+            </Button>
+          )}
+          {!viewTrash && (
+            <Button
+              size="sm"
+              onClick={() => exportChangeRequests(crRows)}
+              disabled={crRows.length === 0}
+              title="Download Change Request (CR) report to formatted Excel file (.xlsx)"
+              className="bg-[#02A9EA] hover:bg-[#0292CA] text-white border-0 shadow-sm font-medium"
+            >
+              <FileSpreadsheet />Download CR ({crRows.length})
             </Button>
           )}
           {!viewTrash && (

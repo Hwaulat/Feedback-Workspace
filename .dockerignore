@@ -1,0 +1,39 @@
+# Git and CI
+.git
+.github
+.gitlab-ci.yml
+
+# Environment files and credentials (CRITICAL: Do NOT bake secrets into image)
+.env
+.env.*
+!.env.example
+
+# Dependencies and build outputs
+node_modules
+.output
+.nitro
+.vinxi
+.tanstack
+dist
+dist-ssr
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor and OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+*.local
+
+# Tests and temporary files
+coverage
+*.test.ts
+*.spec.ts
+vitest.config.ts

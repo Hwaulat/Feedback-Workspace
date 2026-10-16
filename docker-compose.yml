@@ -1,0 +1,16 @@
+services:
+  ticketing-workspace:
+    image: ${DOCKER_IMAGE_TAG}
+    container_name: ticketing-workspace
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    ports:
+      - "${LOCAL_PORT}:${PORT}"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"

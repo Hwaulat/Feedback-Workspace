@@ -771,6 +771,12 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       } else if (access?.role === 'customer' && access.customer_id) {
         const found = customers.find(c => c.id === access.customer_id);
         if (found) targetCustomerName = found.name;
+      } else if (crItems.length > 0) {
+        const firstCustId = crItems[0]?.customer_id;
+        if (firstCustId && crItems.every(i => i.customer_id === firstCustId)) {
+          const found = customers.find(c => c.id === firstCustId);
+          if (found) targetCustomerName = found.name;
+        }
       }
 
       const payload = {

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
-import { Plus, Search, Download, Trash2, RotateCcw, ChevronLeft, ChevronRight, FileSpreadsheet } from 'lucide-react';
+import { Plus, Search, Download, Trash2, RotateCcw, ChevronLeft, ChevronRight, FileSpreadsheet, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useWorkspace } from '@/components/feedback-provider';
 import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, typeBadge, fmtDate, fmtDateTime, fmtReportDate } from '@/components/feedback-views';
 import { types, activities, statuses, isOverdue, parseImages, type FeedbackItem } from '@/lib/feedback-model';
@@ -41,6 +42,32 @@ function FeedbackPage() {
     const t = (i.type || '').toLowerCase();
     return t.includes('change') || t.includes('request') || t.includes('cr');
   }), [rows]);
+
+  const [crCustomerPromptOpen, setCrCustomerPromptOpen] = useState(false);
+  const [promptSelectedCustomer, setPromptSelectedCustomer] = useState('');
+
+  const customerCrCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const c of customers) {
+      const cnt = items.filter(
+        i =>
+          !i.deleted_at &&
+          i.customer_id === c.id &&
+          ((i.type || '').toLowerCase().includes('change') || (i.type || '').toLowerCase().includes('cr'))
+      ).length;
+      map.set(c.id, cnt);
+    }
+    return map;
+  }, [customers, items]);
+
+  const handleDownloadCR = () => {
+    if (selectedCustomer === 'all') {
+      setPromptSelectedCustomer('');
+      setCrCustomerPromptOpen(true);
+      return;
+    }
+    exportChangeRequests(crRows);
+  };
 
   const fbTotalPages = Math.max(1, Math.ceil(rows.length / fbPageSize));
   const paginatedRows = useMemo(() => {
@@ -98,9 +125,13 @@ function FeedbackPage() {
           {!viewTrash && (
             <Button
               size="sm"
-              onClick={() => exportChangeRequests(crRows)}
+              onClick={handleDownloadCR}
               disabled={crRows.length === 0}
-              title="Download Change Request (CR) report to formatted Excel file (.xlsx)"
+              title={
+                selectedCustomer === 'all'
+                  ? 'Pilih customer terlebih dahulu untuk download dokumen CR'
+                  : 'Download Change Request (CR) report to formatted Excel file (.xlsx)'
+              }
               className="bg-[#02A9EA] hover:bg-[#0292CA] text-white border-0 shadow-sm font-medium"
             >
               <FileSpreadsheet />Download CR ({crRows.length})
@@ -546,6 +577,92 @@ function FeedbackPage() {
       )}
       {editing && <FormModal item={editing} customers={customers} onClose={() => setEditing(null)} drawer={true} />}
       {creating && <FormModal customers={customers} onClose={() => setCreating(false)} drawer={true} />}
+
+      {/* Customer Selection Required Modal for CR Download */}
+      <Dialog open={crCustomerPromptOpen} onOpenChange={setCrCustomerPromptOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <AlertCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base font-semibold">Pilih Customer Terlebih Dahulu</DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Dokumen Change Request (CR) wajib per customer
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-foreground/80 leading-relaxed">
+              Untuk men-download dokumen <strong>Change Request (CR)</strong>, Anda wajib memilih customer terlebih dahulu agar data CR dari customer lain tidak masuk ke dalam dokumen.
+            </p>
+
+            <div className="space-y-1.5">
+              <label htmlFor="prompt-customer-select" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Pilih Customer
+              </label>
+              <select
+                id="prompt-customer-select"
+                className="w-full h-10 px-3 text-sm rounded-md border border-input bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-[#02A9EA] focus:border-[#02A9EA]"
+                value={promptSelectedCustomer}
+                onChange={e => setPromptSelectedCustomer(e.target.value)}
+              >
+                <option value="">-- Silakan Pilih Customer --</option>
+                {customers.map(c => {
+                  const count = customerCrCounts.get(c.id) ?? 0;
+                  return (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({count} CR)
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
+            {promptSelectedCustomer && (customerCrCounts.get(promptSelectedCustomer) ?? 0) === 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                ⚠️ Customer ini belum memiliki tiket Change Request untuk diekspor.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="flex flex-row justify-end gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCrCustomerPromptOpen(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              disabled={!promptSelectedCustomer || (customerCrCounts.get(promptSelectedCustomer) ?? 0) === 0}
+              className="bg-[#02A9EA] hover:bg-[#0292CA] text-white border-0 shadow-sm font-medium"
+              onClick={() => {
+                if (!promptSelectedCustomer) return;
+                const chosenId = promptSelectedCustomer;
+                setSelectedCustomer(chosenId);
+                const targetCr = items.filter(
+                  i =>
+                    !i.deleted_at &&
+                    i.customer_id === chosenId &&
+                    ((i.type || '').toLowerCase().includes('change') || (i.type || '').toLowerCase().includes('cr'))
+                );
+                setCrCustomerPromptOpen(false);
+                exportChangeRequests(targetCr);
+              }}
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-1.5" />
+              Download Dokumen CR
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

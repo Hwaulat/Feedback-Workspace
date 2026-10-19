@@ -1,0 +1,87 @@
+default:
+  tags:
+    - dev
+
+stages:
+  - build
+  - deploy
+
+variables:
+  DOCKER_HOST: "unix:///var/run/docker.sock"
+  IMAGE_TAG: $CI_COMMIT_SHORT_SHA
+  DOCKER_IMAGE_TAG: "${CI_REGISTRY_IMAGE}:${IMAGE_TAG}"
+  DOCKER_IMAGE_TAG_LATEST: "${CI_REGISTRY_IMAGE}:latest"
+  VM_PORT: "22"
+
+build:docker:
+  stage: build
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache docker-cli
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+  script:
+    - docker pull "$CI_REGISTRY_IMAGE:latest" || true
+    - >
+      docker build
+      --build-arg VITE_SUPABASE_URL="${VITE_SUPABASE_URL}"
+      --build-arg VITE_SUPABASE_PUBLISHABLE_KEY="${VITE_SUPABASE_PUBLISHABLE_KEY}"
+      --build-arg VITE_SUPABASE_PROJECT_ID="${VITE_SUPABASE_PROJECT_ID}"
+      -t "$DOCKER_IMAGE_TAG"
+      -t "$DOCKER_IMAGE_TAG_LATEST"
+      .
+    - docker push "$DOCKER_IMAGE_TAG"
+    - docker push "$DOCKER_IMAGE_TAG_LATEST"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+deploy:vm:
+  stage: deploy
+  image: alpine:3.20
+  before_script:
+    - which ssh-agent || ( apk update && apk add --no-cache openssh-client bash )
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+  script:
+    - echo "Deploying image tag ${DOCKER_IMAGE_TAG} to target VM ${DEPLOY_VM}..."
+    - >
+      ssh -p "${VM_PORT}" "${DEPLOY_USER}@${DEPLOY_VM}" "
+        set -e
+        cd ${DEPLOYMENT_DIR}
+
+        if [ ! -f .env ]; then
+          echo '[-] ERROR: .env file not found in ${DEPLOYMENT_DIR}!' >&2
+          exit 1
+        fi
+
+        if [ ! -f docker-compose.yml ]; then
+          echo '[-] ERROR: docker-compose.yml not found in ${DEPLOYMENT_DIR}!' >&2
+          exit 1
+        fi
+
+        echo '[+] Updating DOCKER_IMAGE_TAG to ${DOCKER_IMAGE_TAG} in .env...'
+        if grep -q '^DOCKER_IMAGE_TAG=' .env; then
+          sed -i 's|^DOCKER_IMAGE_TAG=.*|DOCKER_IMAGE_TAG=\"${DOCKER_IMAGE_TAG}\"|' .env
+        else
+          echo 'DOCKER_IMAGE_TAG=\"${DOCKER_IMAGE_TAG}\"' >> .env
+        fi
+
+        echo '[+] Authenticating with GitLab Container Registry...'
+        echo '${CI_REGISTRY_PASSWORD}' | docker login -u '${CI_REGISTRY_USER}' --password-stdin '${CI_REGISTRY}'
+
+        echo '[+] Pulling new image tag: ${DOCKER_IMAGE_TAG}...'
+        docker compose pull || docker-compose pull
+
+        echo '[+] Starting updated container...'
+        docker compose up -d --remove-orphans || docker-compose up -d --remove-orphans
+
+        echo '[+] Cleaning up dangling images...'
+        docker image prune -f
+
+        echo '[✓] Deployment completed successfully for tag ${DOCKER_IMAGE_TAG}!'
+      "
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: on_success

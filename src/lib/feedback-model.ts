@@ -1,7 +1,10 @@
 import { z } from 'zod';
 
 export const types = ['Bug Report', 'Change Request', 'Complaint'] as const;
-export const categories = ['Minor', 'Medium', 'Major'] as const;
+export const categories = ['Minor', 'Major'] as const;
+export const categorySchema = z
+  .enum(['Minor', 'Major', 'Medium'])
+  .transform(v => (v === 'Medium' ? 'Minor' : v) as 'Minor' | 'Major');
 export const statuses = ['Execution', 'Waiting', 'Execution by notes'] as const;
 export const activities = ['Done', 'In progress', 'Not started'] as const;
 export const activitySchema = z
@@ -12,7 +15,7 @@ export const dateTimeSchema = z.string().refine(v => !Number.isNaN(Date.parse(v)
 export const itemSchema = z.object({
   customer_id: z.string().uuid(), number: z.number().int().positive(),
   feature: z.string().trim().max(200), feedback: z.string().trim().min(1).max(1000),
-  detail: z.string().max(5000), type: z.enum(types), category: z.enum(categories),
+  detail: z.string().max(5000), type: z.enum(types), category: categorySchema,
   status: z.enum(statuses), activity: activitySchema, notes: z.string().max(5000), estimated_date: dateSchema,
   report_date: dateTimeSchema.optional(),
   needs_review: z.boolean().optional(),

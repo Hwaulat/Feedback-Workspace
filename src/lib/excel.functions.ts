@@ -58,7 +58,7 @@ export const downloadTemplate = createServerFn({ method: 'GET' }).handler(async 
     'Describe the feedback',
     'Optional background or reproduction steps',
     'Bug Report',
-    'Medium',
+    'Minor',
     'Waiting',
     'Not started',
     'Optional notes',
@@ -712,11 +712,10 @@ function normalizeType(val: string): 'Bug Report' | 'Change Request' | 'Complain
   return 'Bug Report';
 }
 
-function normalizeCategory(val: string): 'Minor' | 'Medium' | 'Major' {
+function normalizeCategory(val: string): 'Minor' | 'Major' {
   const s = val.toLowerCase().trim();
   if (s.includes('major') || s.includes('tinggi') || s.includes('high') || s.includes('kritis') || s.includes('critical')) return 'Major';
-  if (s.includes('minor') || s.includes('rendah') || s.includes('low')) return 'Minor';
-  return 'Medium';
+  return 'Minor';
 }
 
 function normalizeStatus(val: string): 'Execution' | 'Waiting' | 'Execution by notes' {

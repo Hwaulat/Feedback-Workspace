@@ -155,9 +155,9 @@ function Overview() {
     value: active.filter(i => i.type === t).length,
   }));
   const maxType = Math.max(1, ...typeCounts.map(t => t.value));
-  const catCounts = (['Major', 'Medium', 'Minor'] as const).map(c => ({
+  const catCounts = (['Major', 'Minor'] as const).map(c => ({
     label: c,
-    cls: c === 'Major' ? 'major' : c === 'Medium' ? 'medium' : 'minor',
+    cls: c === 'Major' ? 'major' : 'minor',
     value: active.filter(i => i.category === c).length,
   }));
 

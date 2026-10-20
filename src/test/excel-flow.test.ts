@@ -228,4 +228,95 @@ describe('Feature: Excel Export & Template Generation Functionality', () => {
     // Non-CR item should NOT be in the sheet
     expect(ws?.rowCount).toBe(10);
   });
+
+  it('generates an executive-ready feedback workbook matching the CR template structure with banner, KPI cards, and all feedback items', async () => {
+    const { generateFeedbackWorkbook } = await import('@/lib/excel.functions');
+    const items = [
+      {
+        customer_id: 'cust-1',
+        number: 1,
+        feature: 'Payment Module',
+        feedback: 'Integrate QRIS Dynamic Payment Gateway',
+        detail: 'Support instant callback notifications',
+        type: 'Change Request',
+        category: 'Major',
+        status: 'Execution',
+        activity: 'In progress',
+        notes: 'API key configured in sandbox',
+        report_date: '2026-10-16 14:00',
+        estimated_date: '2026-11-15',
+        pic_name: 'Budi Santoso',
+      },
+      {
+        customer_id: 'cust-1',
+        number: 2,
+        feature: 'Authentication',
+        feedback: 'Fix typo on login page button',
+        detail: 'Minor label fix',
+        type: 'Bug Report',
+        category: 'Minor',
+        status: 'Execution',
+        activity: 'Done',
+        notes: 'Fixed in PR #12',
+        report_date: '2026-10-15 10:00',
+        estimated_date: '2026-10-16',
+        pic_name: 'Ahmad Fauzi',
+      },
+      {
+        customer_id: 'cust-1',
+        number: 3,
+        feature: 'Notification',
+        feedback: 'Email delivery slow during peak hours',
+        detail: 'Delayed up to 10 minutes',
+        type: 'Complaint',
+        category: 'Medium',
+        status: 'Waiting',
+        activity: 'Not started',
+        notes: 'Under investigation',
+        report_date: '2026-10-14 09:00',
+        estimated_date: '2026-10-25',
+        pic_name: 'Siti Rahma',
+      },
+    ];
+
+    const buffer = await generateFeedbackWorkbook(
+      items,
+      [{ id: 'cust-1', name: 'PT Digital Solusi' }],
+      'PT Digital Solusi'
+    );
+
+    expect(buffer).toBeInstanceOf(Buffer);
+    expect(buffer.byteLength).toBeGreaterThan(0);
+
+    const readWb = new ExcelJS.Workbook();
+    await readWb.xlsx.load(buffer as any);
+
+    const ws = readWb.getWorksheet('Feedback List');
+    expect(ws).toBeDefined();
+
+    // Verify Title Banner
+    expect(ws?.getCell('A2').text).toContain('DOKUMEN LAPORAN FEEDBACK & TICKETING');
+    expect(ws?.getCell('A3').text).toContain('PT Digital Solusi');
+    expect(ws?.getCell('A3').text).toContain('Total Data: 3 Item(s)');
+
+    // Verify KPI Metric Cards
+    expect(ws?.getCell('B6').value).toBe(3); // Total data
+    expect(ws?.getCell('E6').value).toBe(1); // Done
+    expect(ws?.getCell('H6').value).toBe(1); // In progress
+    expect(ws?.getCell('K6').value).toBe(1); // Waiting / Not started
+
+    // Verify Table Headers on Row 8
+    expect(ws?.getCell('A8').text).toBe('No.');
+    expect(ws?.getCell('B8').text).toBe('Customer');
+    expect(ws?.getCell('C8').text).toBe('Type');
+    expect(ws?.getCell('D8').text).toBe('Feature / Module');
+    expect(ws?.getCell('E8').text).toBe('Feedback / Ticket');
+    expect(ws?.getCell('J8').text).toBe('PIC / Reporter');
+
+    // Verify ALL items (Bug Report, Complaint, Change Request) are in the sheet
+    expect(ws?.rowCount).toBe(11); // header is 8, plus 3 items = 11 rows
+    expect(ws?.getCell('C9').text).toBe('Change Request');
+    expect(ws?.getCell('C10').text).toBe('Bug Report');
+    expect(ws?.getCell('C11').text).toBe('Complaint');
+  });
 });

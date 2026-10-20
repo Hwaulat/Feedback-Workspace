@@ -710,6 +710,21 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
     }
     const toastId = toast.loading(`Exporting ${targetItems.length} feedback items to Excel…`);
     try {
+      let targetCustomerName = '';
+      if (selectedCustomer && selectedCustomer !== 'all') {
+        const found = customers.find(c => c.id === selectedCustomer);
+        if (found) targetCustomerName = found.name;
+      } else if (access?.role === 'customer' && access.customer_id) {
+        const found = customers.find(c => c.id === access.customer_id);
+        if (found) targetCustomerName = found.name;
+      } else if (targetItems.length > 0) {
+        const firstCustId = targetItems[0]?.customer_id;
+        if (firstCustId && targetItems.every(i => i.customer_id === firstCustId)) {
+          const found = customers.find(c => c.id === firstCustId);
+          if (found) targetCustomerName = found.name;
+        }
+      }
+
       const payload = {
         items: targetItems.map(i => {
           const isPendingCust = access?.role === 'customer' && Boolean(i.needs_review);
@@ -726,12 +741,15 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
             notes: i.notes,
             report_date: i.report_date ?? i.updated_at.slice(0, 10),
             estimated_date: isPendingCust ? null : i.estimated_date,
+            pic_name: (i as any).pic_name ?? (i as any).actor ?? '',
           };
         }),
         customers: customers.map(c => ({
           id: c.id,
           name: c.name,
         })),
+        mode: 'all' as const,
+        customer_name: targetCustomerName || undefined,
       };
       const b64 = await exportFn({ data: payload });
       const blob = await (
@@ -740,7 +758,8 @@ function WorkspaceState({ initialServerAccess, children }: { initialServerAccess
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = customFileName || `feedback-export-${todayWIB()}.xlsx`;
+      const cleanCust = targetCustomerName ? `-${targetCustomerName.replace(/[^a-zA-Z0-9_-]/g, '_')}` : '';
+      a.download = customFileName || `Feedback-Report${cleanCust}-${todayWIB()}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success(`${targetItems.length} feedback items exported to Excel!`, { id: toastId });

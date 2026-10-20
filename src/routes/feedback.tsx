@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { useWorkspace } from '@/components/feedback-provider';
 import { DetailModal, FormModal, activityBadge, categoryBadge, statusBadge, typeBadge, fmtDate, fmtDateTime, fmtReportDate } from '@/components/feedback-views';
-import { types, activities, statuses, isOverdue, parseImages, type FeedbackItem } from '@/lib/feedback-model';
+import { types, categories, activities, statuses, isOverdue, parseImages, type FeedbackItem } from '@/lib/feedback-model';
 
 export const Route = createFileRoute('/feedback')({
   head: () => ({ meta: [{ title: 'Loop — Ticketing List' }, { name: 'description', content: 'Browse, filter and update customer feedback.' }] }),
@@ -14,7 +14,7 @@ export const Route = createFileRoute('/feedback')({
 
 function FeedbackPage() {
   const { access, demo, customers, items, selectedCustomer, setSelectedCustomer, exportToExcel, exportChangeRequests, remove, openLogin } = useWorkspace();
-  const [search, setSearch] = useState(''); const [type, setType] = useState('all'); const [status, setStatus] = useState('all'); const [activity, setActivity] = useState('all');
+  const [search, setSearch] = useState(''); const [type, setType] = useState('all'); const [category, setCategory] = useState('all'); const [status, setStatus] = useState('all'); const [activity, setActivity] = useState('all');
   const [reviewFilter, setReviewFilter] = useState('all');
   const [viewTrash, setViewTrash] = useState(false);
   const [detail, setDetail] = useState<FeedbackItem | null>(null); const [editing, setEditing] = useState<FeedbackItem | null>(null); const [creating, setCreating] = useState(false);
@@ -32,11 +32,12 @@ function FeedbackPage() {
     .filter(i => (viewTrash ? Boolean(i.deleted_at) : !i.deleted_at)
       && (selectedCustomer === 'all' || i.customer_id === selectedCustomer)
       && (type === 'all' || i.type === type)
+      && (category === 'all' || i.category === category)
       && (status === 'all' || i.status === status)
       && (activity === 'all' || i.activity === activity || (activity === 'Not started' && (i.activity as string) === 'Pending'))
       && (reviewFilter === 'all' || (reviewFilter === 'needs_update' ? Boolean(i.needs_review) : !i.needs_review))
       && (search === '' || `${i.feature} ${i.feedback} ${i.notes} ${i.detail}`.toLowerCase().includes(search.toLowerCase())))
-    .sort((a, b) => b.number - a.number), [items, viewTrash, selectedCustomer, type, status, activity, reviewFilter, search]);
+    .sort((a, b) => b.number - a.number), [items, viewTrash, selectedCustomer, type, category, status, activity, reviewFilter, search]);
 
   const crRows = useMemo(() => rows.filter(i => {
     const t = (i.type || '').toLowerCase();
@@ -119,7 +120,7 @@ function FeedbackPage() {
   }, [rows, fbPage, fbPageSize]);
 
   // Reset page when filters change
-  const fbFilterKey = `${viewTrash}-${selectedCustomer}-${type}-${status}-${activity}-${reviewFilter}-${search}`;
+  const fbFilterKey = `${viewTrash}-${selectedCustomer}-${type}-${category}-${status}-${activity}-${reviewFilter}-${search}`;
   useEffect(() => { setFbPage(1); }, [fbFilterKey, fbPageSize]);
 
   const open = (item: FeedbackItem) => (canManage ? setEditing(item) : setDetail(item));
@@ -245,6 +246,7 @@ function FeedbackPage() {
             </select>
           )}
           <select className="filter-select" value={type} onChange={e => setType(e.target.value)} aria-label="Filter by type"><option value="all">All types</option>{types.map(t => <option key={t}>{t}</option>)}</select>
+          <select className="filter-select" value={category} onChange={e => setCategory(e.target.value)} aria-label="Filter by category"><option value="all">All categories</option>{categories.map(c => <option key={c}>{c}</option>)}</select>
           <select className="filter-select" value={status} onChange={e => setStatus(e.target.value)} aria-label="Filter by status"><option value="all">All statuses</option>{statuses.map(s => <option key={s}>{s}</option>)}</select>
           <select className="filter-select" value={activity} onChange={e => setActivity(e.target.value)} aria-label="Filter by activity"><option value="all">All activity</option>{activities.map(a => <option key={a}>{a}</option>)}</select>
         </div>

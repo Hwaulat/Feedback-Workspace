@@ -357,12 +357,20 @@ export async function generateChangeRequestWorkbook(
 
 export async function generateFeedbackWorkbook(
   items: ExportFeedbackItem[],
-  customers: Array<{ id: string; name: string }>
+  customers: Array<{ id: string; name: string }>,
+  targetCustomerName?: string
 ): Promise<Buffer> {
   const { default: ExcelJS } = await import('exceljs');
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Feedback');
-  ws.addRow(excelColumns);
+  wb.creator = 'Loop Ticketing Workspace';
+  wb.lastModifiedBy = 'Loop System';
+  wb.created = new Date();
+  wb.modified = new Date();
+
+  const ws = wb.addWorksheet('Feedback List', {
+    views: [{ state: 'frozen', ySplit: 8, showGridLines: true }],
+    properties: { defaultRowHeight: 22 },
+  });
 
   const custMap = new Map<string, string>();
   customers.forEach(c => custMap.set(c.id, c.name));
@@ -374,42 +382,282 @@ export async function generateFeedbackWorkbook(
     return a.number - b.number;
   });
 
-  for (const item of sorted) {
+  // Calculate KPIs
+  const totalItems = sorted.length;
+  const doneCount = sorted.filter(i => i.activity === 'Done').length;
+  const inProgressCount = sorted.filter(i => i.activity === 'In progress').length;
+  const waitingCount = sorted.filter(
+    i => i.activity === 'Not started' || i.activity === 'Pending' || i.status === 'Waiting'
+  ).length;
+
+  const customerLabel =
+    targetCustomerName || (custMap.size === 1 ? Array.from(custMap.values())[0] : 'All Registered Clients');
+  const dateFormatted = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jakarta',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date());
+
+  // Define Column Widths (13 columns: A to M)
+  ws.columns = [
+    { key: 'no', width: 7 },              // A: No.
+    { key: 'customer', width: 28 },        // B: Customer
+    { key: 'type', width: 18 },            // C: Type
+    { key: 'feature', width: 24 },         // D: Feature / Module
+    { key: 'title', width: 36 },           // E: Feedback / Ticket
+    { key: 'detail', width: 44 },          // F: Detail Information
+    { key: 'category', width: 15 },        // G: Priority
+    { key: 'status', width: 20 },          // H: Status Workflow
+    { key: 'activity', width: 18 },        // I: Progress Activity
+    { key: 'pic', width: 20 },             // J: PIC / Reporter
+    { key: 'report_date', width: 16 },     // K: Report Date
+    { key: 'estimated_date', width: 22 },  // L: Target Completion
+    { key: 'notes', width: 36 },           // M: Notes from Team
+  ];
+
+  const thinBorder = {
+    top: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+    left: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+    bottom: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+    right: { style: 'thin' as const, color: { argb: 'FFE2E8F0' } },
+  };
+
+  // Row 1: Blank Spacer
+  ws.addRow([]);
+  ws.getRow(1).height = 10;
+
+  // Row 2: Header Title Banner
+  ws.mergeCells('A2:M2');
+  const titleCell = ws.getCell('A2');
+  titleCell.value = '   DOKUMEN LAPORAN FEEDBACK & TICKETING';
+  titleCell.font = { name: 'Segoe UI', size: 15, bold: true, color: { argb: 'FFFFFFFF' } };
+  titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+  titleCell.alignment = { vertical: 'middle', horizontal: 'left' };
+  ws.getRow(2).height = 36;
+
+  // Row 3: Subtitle Metadata
+  ws.mergeCells('A3:M3');
+  const subCell = ws.getCell('A3');
+  subCell.value = `   Workspace: ${customerLabel}   •   Exported: ${dateFormatted} WIB   •   Total Data: ${totalItems} Item(s)`;
+  subCell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF94A3B8' }, italic: true };
+  subCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+  subCell.alignment = { vertical: 'middle', horizontal: 'left' };
+  ws.getRow(3).height = 22;
+
+  // Row 4: Spacer
+  ws.addRow([]);
+  ws.getRow(4).height = 10;
+
+  // Row 5 & 6: Executive KPI Summary Cards
+  const setKpiCard = (
+    startCol: string,
+    endCol: string,
+    label: string,
+    value: number,
+    bgHex: string,
+    borderHex: string,
+    textHex: string
+  ) => {
+    ws.mergeCells(`${startCol}5:${endCol}5`);
+    ws.mergeCells(`${startCol}6:${endCol}6`);
+    const lblCell = ws.getCell(`${startCol}5`);
+    lblCell.value = label;
+    lblCell.font = { name: 'Segoe UI', size: 8.5, bold: true, color: { argb: textHex } };
+    lblCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    lblCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgHex } };
+
+    const valCell = ws.getCell(`${startCol}6`);
+    valCell.value = value;
+    valCell.font = { name: 'Segoe UI', size: 16, bold: true, color: { argb: textHex } };
+    valCell.alignment = { vertical: 'middle', horizontal: 'center' };
+    valCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgHex } };
+
+    const cols = [startCol, endCol];
+    const rows = [5, 6];
+    rows.forEach(r => {
+      cols.forEach(c => {
+        ws.getCell(`${c}${r}`).border = {
+          top: { style: 'thin', color: { argb: borderHex } },
+          left: { style: 'thin', color: { argb: borderHex } },
+          bottom: { style: 'thin', color: { argb: borderHex } },
+          right: { style: 'thin', color: { argb: borderHex } },
+        };
+      });
+    });
+  };
+
+  setKpiCard('B', 'C', 'TOTAL DATA FEEDBACK', totalItems, 'FFF0F9FF', 'FFBAE6FD', 'FF0369A1');
+  setKpiCard('E', 'F', 'COMPLETED (DONE)', doneCount, 'FFECFDF5', 'FFA7F3D0', 'FF047857');
+  setKpiCard('H', 'I', 'IN PROGRESS', inProgressCount, 'FFEFF6FF', 'FFBFDBFE', 'FF1D4ED8');
+  setKpiCard('K', 'L', 'WAITING / NOT STARTED', waitingCount, 'FFFFFBEB', 'FFFDE68A', 'FFB45309');
+
+  ws.getRow(5).height = 18;
+  ws.getRow(6).height = 28;
+
+  // Row 7: Spacer
+  ws.addRow([]);
+  ws.getRow(7).height = 12;
+
+  // Row 8: Table Header
+  const feedbackHeaders = [
+    'No.',
+    'Customer',
+    'Type',
+    'Feature / Module',
+    'Feedback / Ticket',
+    'Detail Information',
+    'Priority',
+    'Status Workflow',
+    'Progress Activity',
+    'PIC / Reporter',
+    'Report Date',
+    'Target Completion',
+    'Notes from Team',
+  ];
+
+  const headerRow = ws.addRow(feedbackHeaders);
+  headerRow.height = 30;
+  headerRow.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+    cell.font = { name: 'Segoe UI', size: 10, bold: true, color: { argb: 'FFFFFFFF' } };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0284C7' } };
+    cell.alignment = {
+      vertical: 'middle',
+      horizontal:
+        colNumber === 1 ||
+        colNumber === 3 ||
+        colNumber === 7 ||
+        colNumber === 8 ||
+        colNumber === 9 ||
+        colNumber === 11 ||
+        colNumber === 12
+          ? 'center'
+          : 'left',
+    };
+    cell.border = {
+      top: { style: 'medium', color: { argb: 'FF0369A1' } },
+      bottom: { style: 'medium', color: { argb: 'FF0369A1' } },
+      left: { style: 'thin', color: { argb: 'FF38BDF8' } },
+      right: { style: 'thin', color: { argb: 'FF38BDF8' } },
+    };
+  });
+
+  // Data Rows (Row 9 onwards)
+  let rowIndex = 9;
+  for (const [idx, item] of sorted.entries()) {
     const customerName = custMap.get(item.customer_id) || 'General';
-    ws.addRow([
+    const isEven = idx % 2 === 0;
+    const bgArgb = isEven ? 'FFFFFFFF' : 'FFF8FAFC';
+
+    const row = ws.addRow([
+      idx + 1,
       safeCell(customerName),
-      item.number,
-      safeCell(item.feature || ''),
+      item.type || '—',
+      safeCell(item.feature || '—'),
       safeCell(item.feedback),
-      safeCell(item.detail || ''),
-      item.type,
-      item.category,
-      item.status,
-      item.activity,
-      safeCell(item.notes || ''),
-      item.estimated_date || '',
+      safeCell(item.detail || '—'),
+      item.category || '—',
+      item.status || '—',
+      item.activity || '—',
+      safeCell(item.pic_name || '—'),
+      item.report_date ? item.report_date.slice(0, 10) : '—',
+      item.estimated_date || '—',
+      safeCell(item.notes || '—'),
     ]);
+
+    row.height = 24;
+
+    row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+      cell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF1E293B' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgArgb } };
+      cell.border = thinBorder;
+      cell.alignment = {
+        vertical: 'middle',
+        horizontal:
+          colNumber === 1 ||
+          colNumber === 3 ||
+          colNumber === 7 ||
+          colNumber === 8 ||
+          colNumber === 9 ||
+          colNumber === 11 ||
+          colNumber === 12
+            ? 'center'
+            : 'left',
+        wrapText: colNumber === 5 || colNumber === 6 || colNumber === 13,
+      };
+
+      // Type Pill highlight (colNumber === 3)
+      if (colNumber === 3) {
+        const t = String(cell.value).toLowerCase();
+        if (t.includes('bug')) {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFDC2626' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF2F2' } };
+        } else if (t.includes('change') || t.includes('cr')) {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF0284C7' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF0F9FF' } };
+        } else if (t.includes('complaint')) {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFD97706' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
+        }
+      }
+
+      // Priority Pill highlight (colNumber === 7)
+      if (colNumber === 7) {
+        const cat = String(cell.value);
+        if (cat === 'Major') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFDC2626' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEF2F2' } };
+        } else if (cat === 'Medium') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFD97706' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
+        } else if (cat === 'Minor') {
+          cell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF2563EB' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+        }
+      }
+
+      // Status Workflow Pill highlight (colNumber === 8)
+      if (colNumber === 8) {
+        const stat = String(cell.value);
+        if (stat === 'Execution') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF059669' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFDF5' } };
+        } else if (stat === 'Waiting') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FFD97706' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFFBEB' } };
+        } else if (stat === 'Execution by notes') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF4F46E5' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEEF2FF' } };
+        }
+      }
+
+      // Activity Pill highlight (colNumber === 9)
+      if (colNumber === 9) {
+        const act = String(cell.value);
+        if (act === 'Done') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF059669' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFECFDF5' } };
+        } else if (act === 'In progress') {
+          cell.font = { name: 'Segoe UI', size: 9.5, bold: true, color: { argb: 'FF2563EB' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
+        } else if (act === 'Not started' || act === 'Pending') {
+          cell.font = { name: 'Segoe UI', size: 9.5, color: { argb: 'FF64748B' } };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+        }
+      }
+    });
+
+    rowIndex++;
   }
 
-  ws.columns.forEach(c => {
-    c.width = 24;
-  });
-  ws.getRow(1).font = { bold: true, name: 'Arial', color: { argb: 'FFFFFFFF' } };
-  ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF02A9EA' } };
-  ws.views = [{ state: 'frozen', ySplit: 1 }];
-
-  const maxRow = Math.max(sorted.length + 1, 5001);
-  [types, categories, statuses, activities].forEach((values, i) => {
-    for (let r = 2; r <= maxRow; r++) {
-      ws.getCell(r, i + 6).dataValidation = {
-        type: 'list',
-        allowBlank: false,
-        formulae: [`"${values.join(',')}"`],
-        showErrorMessage: true,
-        error: 'Choose a valid option from the dropdown.',
-      };
-    }
-  });
+  // Set AutoFilter on header row
+  const lastRow = Math.max(rowIndex - 1, 8);
+  ws.autoFilter = {
+    from: { row: 8, column: 1 },
+    to: { row: lastRow, column: 13 },
+  };
 
   const buffer = await wb.xlsx.writeBuffer();
   return Buffer.from(buffer);
@@ -453,7 +701,7 @@ export const exportFeedback = createServerFn({ method: 'POST' })
     await requireAccess();
     const buffer = data.mode === 'cr'
       ? await generateChangeRequestWorkbook(data.items, data.customers, data.customer_name)
-      : await generateFeedbackWorkbook(data.items, data.customers);
+      : await generateFeedbackWorkbook(data.items, data.customers, data.customer_name);
     return buffer.toString('base64');
   });
 
@@ -524,9 +772,10 @@ export async function parseExcelBuffer(
     throw new Error('Unable to read Excel workbook. Ensure the file is a valid .xlsx spreadsheet.');
   }
 
-  // Flexible sheet selection: prefer sheet named 'Feedback' (case-insensitive), or fallback to the first worksheet
+  // Flexible sheet selection: prefer sheet with 'feedback' or 'change' in name (case-insensitive), or fallback to the first worksheet
   const targetSheet =
-    wb.worksheets.find(s => s.name.trim().toLowerCase() === 'feedback') ||
+    wb.worksheets.find(s => s.name.trim().toLowerCase().includes('feedback')) ||
+    wb.worksheets.find(s => s.name.trim().toLowerCase().includes('change')) ||
     wb.worksheets[0];
 
   if (!targetSheet) throw new Error('Excel file does not contain any worksheets.');
@@ -534,15 +783,18 @@ export async function parseExcelBuffer(
 
   if (ws.rowCount - 1 > MAX_IMPORT_ROWS) throw new Error(`Maximum ${MAX_IMPORT_ROWS.toLocaleString()} feedback rows per workbook.`);
 
-  // Detect header row (scanning rows 1 to 5)
+  // Detect header row (scanning rows 1 to 15)
   let headerRow = 1;
-  for (let r = 1; r <= Math.min(5, ws.rowCount); r++) {
+  for (let r = 1; r <= Math.min(15, ws.rowCount); r++) {
     const row = ws.getRow(r);
     let rowStr = '';
     row.eachCell({ includeEmpty: false }, cell => {
-      rowStr += ' ' + cell.text.toLowerCase();
+      rowStr += ' ' + String(cell.text || cell.value || '').toLowerCase();
     });
-    if (rowStr.includes('customer') || rowStr.includes('feedback') || rowStr.includes('pelanggan')) {
+    // Check if row has customer column AND other key columns, or multiple key columns
+    const hasCust = rowStr.includes('customer') || rowStr.includes('pelanggan') || rowStr.includes('client');
+    const hasFeedback = rowStr.includes('feedback') || rowStr.includes('fitur') || rowStr.includes('detail') || rowStr.includes('type') || rowStr.includes('priority') || rowStr.includes('change request');
+    if ((hasCust && hasFeedback) || (rowStr.includes('feedback') && (rowStr.includes('fitur') || rowStr.includes('type') || rowStr.includes('detail')))) {
       headerRow = r;
       break;
     }
@@ -564,19 +816,20 @@ export async function parseExcelBuffer(
 
   const hRow = ws.getRow(headerRow);
   for (let c = 1; c <= ws.columnCount; c++) {
-    const val = hRow.getCell(c).text.trim().toLowerCase();
+    const cell = hRow.getCell(c);
+    const val = String(cell.text || cell.value || '').trim().toLowerCase();
     if (!val) continue;
     if (colMap.customer === -1 && (val.includes('customer') || val.includes('pelanggan') || val.includes('client') || val.includes('klien'))) colMap.customer = c;
     else if (colMap.number === -1 && (val === 'no' || val === 'no.' || val === 'nomor' || val === 'number')) colMap.number = c;
     else if (colMap.feature === -1 && (val.includes('feature') || val.includes('fitur') || val.includes('modul') || val.includes('menu'))) colMap.feature = c;
-    else if (colMap.feedback === -1 && (val.includes('feedback') || val.includes('masukan') || val.includes('isu') || val.includes('issue') || val.includes('judul') || val.includes('title') || val.includes('deskripsi'))) colMap.feedback = c;
-    else if (colMap.detail === -1 && (val.includes('detail') || val.includes('rincian') || val.includes('keterangan'))) colMap.detail = c;
+    else if (colMap.feedback === -1 && (val.includes('feedback') || val.includes('masukan') || val.includes('isu') || val.includes('issue') || val.includes('judul') || val.includes('title') || val.includes('deskripsi') || val.includes('change request'))) colMap.feedback = c;
+    else if (colMap.detail === -1 && (val.includes('detail') || val.includes('rincian') || val.includes('keterangan') || val.includes('scope'))) colMap.detail = c;
     else if (colMap.type === -1 && (val.includes('type') || val.includes('tipe') || val.includes('jenis'))) colMap.type = c;
     else if (colMap.category === -1 && (val.includes('category') || val.includes('kategori') || val.includes('prioritas') || val.includes('priority'))) colMap.category = c;
-    else if (colMap.status === -1 && val.includes('status') && !val.includes('activity') && !val.includes('aktivitas')) colMap.status = c;
+    else if (colMap.status === -1 && val.includes('status') && !val.includes('activity') && !val.includes('aktivitas') && !val.includes('progress')) colMap.status = c;
     else if (colMap.activity === -1 && (val.includes('activity') || val.includes('aktivitas') || val.includes('progres') || val.includes('progress'))) colMap.activity = c;
-    else if (colMap.notes === -1 && (val.includes('note') || val.includes('catatan') || val.includes('remark') || val.includes('ragdalion'))) colMap.notes = c;
-    else if (colMap.estimated_date === -1 && (val.includes('estimate') || val.includes('target') || val.includes('estimasi') || val.includes('due') || val.includes('deadline') || val.includes('tanggal') || val.includes('date'))) colMap.estimated_date = c;
+    else if (colMap.notes === -1 && (val.includes('note') || val.includes('catatan') || val.includes('remark') || val.includes('ragdalion') || val.includes('team'))) colMap.notes = c;
+    else if (colMap.estimated_date === -1 && (val.includes('estimate') || val.includes('target') || val.includes('estimasi') || val.includes('due') || val.includes('deadline') || val.includes('completion') || val.includes('tanggal') || val.includes('date'))) colMap.estimated_date = c;
   }
 
   // If column number was not explicitly named, default based on presence of customer column
@@ -649,7 +902,7 @@ export async function parseExcelBuffer(
       if (seen.has(key)) throw new Error(`Duplicate Customer "${name}" + No. ${number} in this workbook.`);
       seen.add(key);
 
-      const date = normalizeDate(ws.getCell(r, colMap.estimated_date));
+      const date = colMap.estimated_date !== -1 ? normalizeDate(ws.getCell(r, colMap.estimated_date)) : null;
       const rawType = cellText(r, colMap.type);
       const rawCat = cellText(r, colMap.category);
       const rawStatus = cellText(r, colMap.status);
